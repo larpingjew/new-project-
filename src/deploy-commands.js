@@ -1,8 +1,7 @@
 const {
     REST,
     Routes,
-    SlashCommandBuilder,
-    PermissionFlagsBits
+    SlashCommandBuilder
 } = require("discord.js");
 
 const commands = [
@@ -10,78 +9,24 @@ const commands = [
     new SlashCommandBuilder()
         .setName("emojipack")
         .setDescription("Manage EmojiPacks")
+
         .addSubcommand(sub =>
             sub
                 .setName("upload")
-                .setDescription("Create a new EmojiPack")
+                .setDescription("Create an EmojiPack with up to 50 emojis")
+
                 .addStringOption(option =>
                     option
                         .setName("name")
                         .setDescription("The name of the EmojiPack")
                         .setRequired(true)
                 )
+
                 .addStringOption(option =>
                     option
-                        .setName("emoji1")
-                        .setDescription("First custom Discord emoji")
+                        .setName("emojis")
+                        .setDescription("Paste up to 50 custom Discord emojis")
                         .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option.setName("emoji2").setDescription("Second emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji3").setDescription("Third emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji4").setDescription("Fourth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji5").setDescription("Fifth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji6").setDescription("Sixth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji7").setDescription("Seventh emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji8").setDescription("Eighth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji9").setDescription("Ninth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji10").setDescription("Tenth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji11").setDescription("Eleventh emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji12").setDescription("Twelfth emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji13").setDescription("13th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji14").setDescription("14th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji15").setDescription("15th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji16").setDescription("16th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji17").setDescription("17th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji18").setDescription("18th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji19").setDescription("19th emoji")
-                )
-                .addStringOption(option =>
-                    option.setName("emoji20").setDescription("20th emoji")
                 )
         )
 
@@ -89,16 +34,18 @@ const commands = [
             sub
                 .setName("load")
                 .setDescription("Load an EmojiPack into a server")
+
                 .addStringOption(option =>
                     option
                         .setName("name")
                         .setDescription("EmojiPack name")
                         .setRequired(true)
                 )
+
                 .addStringOption(option =>
                     option
                         .setName("server_id")
-                        .setDescription("The server ID to load the pack into")
+                        .setDescription("Server ID to load the pack into")
                         .setRequired(true)
                 )
         )
@@ -106,7 +53,8 @@ const commands = [
         .addSubcommand(sub =>
             sub
                 .setName("view")
-                .setDescription("View an EmojiPack")
+                .setDescription("View the emojis inside an EmojiPack")
+
                 .addStringOption(option =>
                     option
                         .setName("name")
@@ -119,6 +67,7 @@ const commands = [
             sub
                 .setName("delete")
                 .setDescription("Delete an EmojiPack")
+
                 .addStringOption(option =>
                     option
                         .setName("name")
@@ -127,14 +76,16 @@ const commands = [
                 )
         )
 
-        .addSubcommand(sub =>
-            sub
+        .addSubcommandGroup(group =>
+            group
                 .setName("admin")
                 .setDescription("Manage EmojiPack admins")
-                .addSubcommand(admin =>
-                    admin
+
+                .addSubcommand(sub =>
+                    sub
                         .setName("add")
                         .setDescription("Add an EmojiPack admin")
+
                         .addUserOption(option =>
                             option
                                 .setName("user")
@@ -142,10 +93,12 @@ const commands = [
                                 .setRequired(true)
                         )
                 )
-                .addSubcommand(admin =>
-                    admin
+
+                .addSubcommand(sub =>
+                    sub
                         .setName("remove")
                         .setDescription("Remove an EmojiPack admin")
+
                         .addUserOption(option =>
                             option
                                 .setName("user")
@@ -161,23 +114,32 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("help")
-        .setDescription("View all EmojiPack commands")
+        .setDescription("View EmojiPack commands")
 
 ].map(command => command.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
+const rest = new REST({ version: "10" })
+    .setToken(process.env.DISCORD_BOT_TOKEN);
 
 (async () => {
     try {
-        console.log("Registering slash commands...");
+
+        console.log("Registering EmojiPack slash commands...");
 
         await rest.put(
             Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-            { body: commands }
+            {
+                body: commands
+            }
         );
 
-        console.log("Slash commands registered successfully.");
+        console.log("EmojiPack slash commands registered!");
+
     } catch (error) {
+
+        console.error("Failed to register slash commands:");
         console.error(error);
+
+        process.exit(1);
     }
 })();
