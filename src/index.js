@@ -1,8 +1,11 @@
 const {
     Client,
     GatewayIntentBits,
-    EmbedBuilder
+    EmbedBuilder,
+    AttachmentBuilder
 } = require("discord.js");
+
+const sharp = require("sharp");
 
 const db = require("./database");
 
@@ -15,7 +18,7 @@ const client = new Client({
 const OWNER_ID = process.env.OWNER_ID;
 
 // ==========================================
-// PERMISSION FUNCTIONS
+// PERMISSIONS
 // ==========================================
 
 function isOwner(userId) {
@@ -36,7 +39,7 @@ function isAdmin(userId) {
 }
 
 // ==========================================
-// PARSE DISCORD EMOJIS
+// PARSE EMOJIS
 // ==========================================
 
 function parseEmojis(input) {
@@ -51,16 +54,95 @@ function parseEmojis(input) {
 
         const full = match[0];
 
-        const animated = full.startsWith("<a:");
-
         emojis.push({
             name: match[1],
             id: match[2],
-            animated
+            animated: full.startsWith("<a:")
         });
     }
 
     return emojis;
+}
+
+// ==========================================
+// CREATE EMOJI GRID
+// ==========================================
+
+async function createEmojiGrid(emojis) {
+
+    const emojiSize = 100;
+    const padding = 20;
+
+    const columns = 5;
+
+    const rows = Math.ceil(emojis.length / columns);
+
+    const width =
+        (columns * emojiSize) +
+        ((columns + 1) * padding);
+
+    const height =
+        (rows * emojiSize) +
+        ((rows + 1) * padding);
+
+    const svgEmojis = [];
+
+    for (let i = 0; i < emojis.length; i++) {
+
+        const emoji = emojis[i];
+
+        const row = Math.floor(i / columns);
+        const column = i % columns;
+
+        const x =
+            padding +
+            (column * emojiSize) +
+            (emojiSize / 2);
+
+        const y =
+            padding +
+            (row * emojiSize) +
+            (emojiSize / 2);
+
+        const extension = emoji.animated
+            ? "gif"
+            : "png";
+
+        const url =
+            `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`;
+
+        svgEmojis.push(`
+            <image
+                href="${url}"
+                x="${x - 40}"
+                y="${y - 40}"
+                width="80"
+                height="80"
+                preserveAspectRatio="xMidYMid meet"
+            />
+        `);
+    }
+
+    const svg = `
+        <svg
+            width="${width}"
+            height="${height}"
+            xmlns="http://www.w3.org/2000/svg"
+        >
+            <rect
+                width="100%"
+                height="100%"
+                rx="20"
+                fill="#2b2d31"
+            />
+
+            ${svgEmojis.join("\n")}
+        </svg>
+    `;
+
+    return await sharp(Buffer.from(svg))
+        .png()
+        .toBuffer();
 }
 
 // ==========================================
@@ -100,49 +182,41 @@ client.on("interactionCreate", async interaction => {
                     "EmojiPack lets you save and share Discord emoji packs."
                 )
                 .addFields(
-
                     {
                         name: "📤 /emojipack upload",
                         value:
-                            "Creates a new EmojiPack. Admins can save up to **50 custom Discord emojis** in one pack."
+                            "Creates an EmojiPack containing up to 50 custom Discord emojis."
                     },
-
                     {
                         name: "📥 /emojipack load",
                         value:
-                            "Loads an EmojiPack into a Discord server. The bot must already be in the server and have **Manage Expressions** permission."
+                            "Loads an EmojiPack into a Discord server."
                     },
-
                     {
                         name: "📦 /emojipacks",
                         value:
-                            "Shows all EmojiPacks, their emoji count, creator and creation date."
+                            "Shows all available EmojiPacks."
                     },
-
                     {
                         name: "👀 /emojipack view",
                         value:
-                            "Shows all emojis stored inside a specific EmojiPack."
+                            "Shows the actual emojis inside an EmojiPack."
                     },
-
                     {
                         name: "🗑️ /emojipack delete",
                         value:
-                            "Permanently deletes an EmojiPack. EmojiPack admins only."
+                            "Permanently deletes an EmojiPack."
                     },
-
                     {
                         name: "👑 /emojipack admin add",
                         value:
-                            "Adds a user as an EmojiPack admin. Bot owner only."
+                            "Adds an EmojiPack admin. Bot owner only."
                     },
-
                     {
                         name: "👑 /emojipack admin remove",
                         value:
-                            "Removes a user's EmojiPack admin access. Bot owner only."
+                            "Removes an EmojiPack admin. Bot owner only."
                     }
-
                 )
                 .setTimestamp();
 
@@ -202,7 +276,7 @@ client.on("interactionCreate", async interaction => {
         }
 
         // ======================================
-        // /emojipack
+        // EMOJIPACK COMMAND
         // ======================================
 
         if (interaction.commandName !== "emojipack") {
@@ -264,8 +338,7 @@ client.on("interactionCreate", async interaction => {
 
                 return interaction.reply({
                     content:
-                        "❌ I couldn't find any valid custom Discord emojis.\n\n" +
-                        "Example: `<:emoji:123456789>`",
+                        "❌ I couldn't find any valid custom Discord emojis.",
                     ephemeral: true
                 });
             }
@@ -274,13 +347,11 @@ client.on("interactionCreate", async interaction => {
 
                 return interaction.reply({
                     content:
-                        `❌ You provided **${emojis.length} emojis**.\n` +
-                        "An EmojiPack can contain a maximum of **50 emojis**.",
+                        `❌ You provided **${emojis.length} emojis**. Maximum is **50**.`,
                     ephemeral: true
                 });
             }
 
-            // Remove duplicate emoji IDs
             const uniqueIds = new Set(
                 emojis.map(emoji => emoji.id)
             );
@@ -289,7 +360,7 @@ client.on("interactionCreate", async interaction => {
 
                 return interaction.reply({
                     content:
-                        "❌ You cannot use the same emoji more than once in a pack.",
+                        "❌ You cannot use the same emoji more than once.",
                     ephemeral: true
                 });
             }
@@ -321,7 +392,6 @@ client.on("interactionCreate", async interaction => {
                         emoji.animated ? 1 : 0
                     );
                 }
-
             });
 
             createPack();
@@ -367,36 +437,54 @@ client.on("interactionCreate", async interaction => {
                 `)
                 .all(name);
 
-            const emojiDisplay = emojis
-                .map(emoji => {
+            await interaction.deferReply();
 
-                    if (emoji.emoji_animated) {
-                        return `<a:${emoji.emoji_name}:${emoji.emoji_id}>`;
+            try {
+
+                const image = await createEmojiGrid(
+                    emojis.map(emoji => ({
+                        id: emoji.emoji_id,
+                        name: emoji.emoji_name,
+                        animated: Boolean(emoji.emoji_animated)
+                    }))
+                );
+
+                const attachment = new AttachmentBuilder(
+                    image,
+                    {
+                        name: "emojipack.png"
                     }
+                );
 
-                    return `<:${emoji.emoji_name}:${emoji.emoji_id}>`;
+                const embed = new EmbedBuilder()
+                    .setTitle(`📦 EmojiPack: ${pack.name}`)
+                    .setDescription(
+                        `**${emojis.length}/50 emojis**\n\n` +
+                        `Use **/emojipack load** to add this pack to a server.`
+                    )
+                    .setImage("attachment://emojipack.png")
+                    .addFields({
+                        name: "Created by",
+                        value: `<@${pack.creator_id}>`
+                    })
+                    .setTimestamp();
 
-                })
-                .join(" ");
+                return interaction.editReply({
+                    embeds: [embed],
+                    files: [attachment]
+                });
 
-            const embed = new EmbedBuilder()
-                .setTitle(`📦 EmojiPack: ${pack.name}`)
-                .setDescription(
-                    `${emojiDisplay}\n\n` +
-                    `📦 **${emojis.length}/50 emojis**\n\n` +
-                    `**Load this pack:**\n` +
-                    `\`/emojipack load\`\n` +
-                    `Then enter the pack name and destination server ID.`
-                )
-                .addFields({
-                    name: "Created by",
-                    value: `<@${pack.creator_id}>`
-                })
-                .setTimestamp();
+            } catch (error) {
 
-            return interaction.reply({
-                embeds: [embed]
-            });
+                console.error(
+                    "Failed to create emoji preview:",
+                    error
+                );
+
+                return interaction.editReply(
+                    "❌ I couldn't create the emoji preview."
+                );
+            }
         }
 
         // ======================================
@@ -411,7 +499,8 @@ client.on("interactionCreate", async interaction => {
             if (!isAdmin(interaction.user.id)) {
 
                 return interaction.reply({
-                    content: "❌ You are not an EmojiPack admin.",
+                    content:
+                        "❌ You are not an EmojiPack admin.",
                     ephemeral: true
                 });
             }
@@ -548,7 +637,7 @@ client.on("interactionCreate", async interaction => {
         }
 
         // ======================================
-        // ADMIN ADD / REMOVE
+        // ADMIN
         // ======================================
 
         if (
