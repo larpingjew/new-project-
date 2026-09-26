@@ -1,6 +1,17 @@
 const Database = require("better-sqlite3");
+const fs = require("fs");
+const path = require("path");
 
-const db = new Database("emojipack.db");
+const dataFolder = path.join(process.cwd(), "data");
+
+if (!fs.existsSync(dataFolder)) {
+    fs.mkdirSync(dataFolder, { recursive: true });
+}
+
+const db = new Database(
+    process.env.DATABASE_PATH ||
+    path.join(dataFolder, "emojipack.db")
+);
 
 db.pragma("journal_mode = WAL");
 
@@ -16,8 +27,7 @@ db.exec(`
         pack_name TEXT NOT NULL,
         emoji_name TEXT NOT NULL,
         emoji_id TEXT NOT NULL,
-        emoji_animated INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (pack_name) REFERENCES packs(name) ON DELETE CASCADE
+        emoji_animated INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS admins (
