@@ -6,7 +6,6 @@ const {
 } = require("discord.js");
 
 const sharp = require("sharp");
-
 const db = require("./database");
 
 const client = new Client({
@@ -26,7 +25,6 @@ function isOwner(userId) {
 }
 
 function isAdmin(userId) {
-
     if (isOwner(userId)) {
         return true;
     }
@@ -39,7 +37,7 @@ function isAdmin(userId) {
 }
 
 // ==========================================
-// PARSE EMOJIS
+// PARSE DISCORD EMOJIS
 // ==========================================
 
 function parseEmojis(input) {
@@ -65,14 +63,13 @@ function parseEmojis(input) {
 }
 
 // ==========================================
-// CREATE EMOJI GRID
+// CREATE ACTUAL EMOJI IMAGE GRID
 // ==========================================
 
 async function createEmojiGrid(emojis) {
 
-    const emojiSize = 100;
+    const emojiSize = 110;
     const padding = 20;
-
     const columns = 5;
 
     const rows = Math.ceil(emojis.length / columns);
@@ -85,62 +82,101 @@ async function createEmojiGrid(emojis) {
         (rows * emojiSize) +
         ((rows + 1) * padding);
 
-    const svgEmojis = [];
+    const composites = [];
 
     for (let i = 0; i < emojis.length; i++) {
 
         const emoji = emojis[i];
 
-        const row = Math.floor(i / columns);
-        const column = i % columns;
+        try {
 
-        const x =
-            padding +
-            (column * emojiSize) +
-            (emojiSize / 2);
+            const extension = emoji.animated
+                ? "gif"
+                : "png";
 
-        const y =
-            padding +
-            (row * emojiSize) +
-            (emojiSize / 2);
+            const url =
+                `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`;
 
-        const extension = emoji.animated
-            ? "gif"
-            : "png";
+            console.log(`Downloading emoji: ${emoji.name}`);
 
-        const url =
-            `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`;
+            const response = await fetch(url);
 
-        svgEmojis.push(`
-            <image
-                href="${url}"
-                x="${x - 40}"
-                y="${y - 40}"
-                width="80"
-                height="80"
-                preserveAspectRatio="xMidYMid meet"
-            />
-        `);
+            if (!response.ok) {
+                console.log(
+                    `Failed to download ${emoji.name}: HTTP ${response.status}`
+                );
+                continue;
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            const emojiBuffer = Buffer.from(arrayBuffer);
+
+            const resizedEmoji = await sharp(emojiBuffer, {
+                animated: false
+            })
+                .resize(80, 80, {
+                    fit: "contain",
+                    background: {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        alpha: 0
+                    }
+                })
+                .png()
+                .toBuffer();
+
+            const row = Math.floor(i / columns);
+            const column = i % columns;
+
+            const left =
+                padding +
+                (column * emojiSize) +
+                15;
+
+            const top =
+                padding +
+                (row * emojiSize) +
+                15;
+
+            composites.push({
+                input: resizedEmoji,
+                left,
+                top
+            });
+
+        } catch (error) {
+
+            console.error(
+                `Failed to process emoji ${emoji.name}:`,
+                error.message
+            );
+        }
     }
 
-    const svg = `
-        <svg
-            width="${width}"
-            height="${height}"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            <rect
-                width="100%"
-                height="100%"
-                rx="20"
-                fill="#2b2d31"
-            />
+    if (composites.length === 0) {
+        throw new Error("No emojis could be downloaded.");
+    }
 
-            ${svgEmojis.join("\n")}
-        </svg>
-    `;
+    const background = await sharp({
+        create: {
+            width,
+            height,
+            channels: 4,
+            background: {
+                r: 43,
+                g: 45,
+                b: 49,
+                alpha: 1
+            }
+        }
+    })
+        .png()
+        .toBuffer();
 
-    return await sharp(Buffer.from(svg))
+    return await sharp(background)
+        .composite(composites)
         .png()
         .toBuffer();
 }
@@ -185,7 +221,7 @@ client.on("interactionCreate", async interaction => {
                     {
                         name: "📤 /emojipack upload",
                         value:
-                            "Creates an EmojiPack containing up to 50 custom Discord emojis."
+                            "Creates an EmojiPack containing up to **50 custom Discord emojis**."
                     },
                     {
                         name: "📥 /emojipack load",
@@ -195,12 +231,12 @@ client.on("interactionCreate", async interaction => {
                     {
                         name: "📦 /emojipacks",
                         value:
-                            "Shows all available EmojiPacks."
+                            "Shows all available EmojiPacks, their emoji count, creator and creation date."
                     },
                     {
                         name: "👀 /emojipack view",
                         value:
-                            "Shows the actual emojis inside an EmojiPack."
+                            "Shows the actual emoji images inside an EmojiPack."
                     },
                     {
                         name: "🗑️ /emojipack delete",
@@ -276,7 +312,7 @@ client.on("interactionCreate", async interaction => {
         }
 
         // ======================================
-        // EMOJIPACK COMMAND
+        // EMOJIPACK
         // ======================================
 
         if (interaction.commandName !== "emojipack") {
@@ -284,6 +320,7 @@ client.on("interactionCreate", async interaction => {
         }
 
         const subcommand = interaction.options.getSubcommand();
+        const subcommandGroup = interaction.options.getSubcommandGroup();
 
         // ======================================
         // UPLOAD
@@ -291,7 +328,7 @@ client.on("interactionCreate", async interaction => {
 
         if (
             subcommand === "upload" &&
-            !interaction.options.getSubcommandGroup()
+            !subcommandGroup
         ) {
 
             if (!isAdmin(interaction.user.id)) {
@@ -338,7 +375,8 @@ client.on("interactionCreate", async interaction => {
 
                 return interaction.reply({
                     content:
-                        "❌ I couldn't find any valid custom Discord emojis.",
+                        "❌ I couldn't find any valid custom Discord emojis.\n\n" +
+                        "Example: `<:emoji:123456789>`",
                     ephemeral: true
                 });
             }
@@ -347,7 +385,8 @@ client.on("interactionCreate", async interaction => {
 
                 return interaction.reply({
                     content:
-                        `❌ You provided **${emojis.length} emojis**. Maximum is **50**.`,
+                        `❌ You provided **${emojis.length} emojis**.\n` +
+                        "An EmojiPack can contain a maximum of **50 emojis**.",
                     ephemeral: true
                 });
             }
@@ -408,7 +447,7 @@ client.on("interactionCreate", async interaction => {
 
         if (
             subcommand === "view" &&
-            !interaction.options.getSubcommandGroup()
+            !subcommandGroup
         ) {
 
             const name = interaction.options
@@ -482,7 +521,7 @@ client.on("interactionCreate", async interaction => {
                 );
 
                 return interaction.editReply(
-                    "❌ I couldn't create the emoji preview."
+                    "❌ I couldn't create the emoji preview. Check the Railway logs for the exact error."
                 );
             }
         }
@@ -493,7 +532,7 @@ client.on("interactionCreate", async interaction => {
 
         if (
             subcommand === "delete" &&
-            !interaction.options.getSubcommandGroup()
+            !subcommandGroup
         ) {
 
             if (!isAdmin(interaction.user.id)) {
@@ -541,7 +580,7 @@ client.on("interactionCreate", async interaction => {
 
         if (
             subcommand === "load" &&
-            !interaction.options.getSubcommandGroup()
+            !subcommandGroup
         ) {
 
             const name = interaction.options
@@ -640,9 +679,7 @@ client.on("interactionCreate", async interaction => {
         // ADMIN
         // ======================================
 
-        if (
-            interaction.options.getSubcommandGroup() === "admin"
-        ) {
+        if (subcommandGroup === "admin") {
 
             if (!isOwner(interaction.user.id)) {
 
