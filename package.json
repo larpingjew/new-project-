@@ -1,11 +1,11 @@
 {
   "name": "emojipack",
   "version": "1.0.0",
-  "description": "Discord EmojiPack bot",
+  "description": "EmojiPack Discord bot",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/deploy-commands.js && node src/index.js",
     "deploy": "node src/deploy-commands.js"
   },
   "dependencies": {
