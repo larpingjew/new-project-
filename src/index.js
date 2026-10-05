@@ -157,7 +157,10 @@ client.on("interactionCreate",async i=>{
       return i.reply({content:"❌ I couldn't change the command guide page.",ephemeral:true}).catch(()=>{});
     }
   }
-      if(n==="ai" && sub==="reply"){
+if(!i.isChatInputCommand()) return;
+  try {
+    const n=i.commandName, sub=i.options.getSubcommand(false);
+    if(n==="ai" && sub==="reply"){
       if(!i.guild)return reply(i,"Use this command inside a server.");
       if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure the AI channel.");
       const channel=i.options.getChannel("channel");
@@ -165,9 +168,6 @@ client.on("interactionCreate",async i=>{
       aiMemory.delete(channel.id);
       return reply(i,"🤖 AI replies enabled in "+channel.toString()+". Talk in that channel and I will reply.");
     }
-if(!i.isChatInputCommand()) return;
-  try {
-    const n=i.commandName, sub=i.options.getSubcommand(false);
     if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],ephemeral:true});}
     if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
     if(["help","modhelp"].includes(n)){
