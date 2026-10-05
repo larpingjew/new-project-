@@ -23,7 +23,7 @@ async function askAI(channel, message) {
   });
   const data = await response.json();
   if(!response.ok) throw new Error(data.error?.message || "OpenAI API request failed.");
-  const answer = data.output_text || "I couldn't generate a response.";
+  const answer = data.output_text || data.output?.flatMap(item=>item.content||[]).filter(part=>part.type==="output_text").map(part=>part.text).join("\n") || "I couldn't generate a response.";
   history.push({role:"assistant",content:answer});
   aiMemory.set(channel.id,history.slice(-12));
   return answer;
