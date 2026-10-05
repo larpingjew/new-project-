@@ -26,6 +26,12 @@ function presence() {
   client.user.setPresence({status:setting("status_state")||"online",activities:setting("status_text")?[{name:setting("status_text"),type:types[setting("status_type")]??ActivityType.Playing}]:[]});
 }
 client.once("ready",()=>{console.log(`Moderation bot online as ${client.user.tag}`);presence();});
+client.on("error",e=>console.error("Discord client error:",e));
+client.on("shardError",e=>console.error("Discord gateway error:",e));
+client.on("warn",m=>console.warn("Discord.js warning:",m));
+console.log("Starting Discord bot...");
+if(!process.env.DISCORD_BOT_TOKEN){console.error("DISCORD_BOT_TOKEN is missing from Railway Variables.");process.exit(1);}
+
 client.on("interactionCreate",async i=>{
   if(!i.isChatInputCommand()) return;
   try {
@@ -111,4 +117,4 @@ client.on("interactionCreate",async i=>{
   }
 });
 client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;const prefix=getPrefix(message.guild);if(!message.content.startsWith(prefix))return;const parts=message.content.slice(prefix.length).trim().split(/\s+/);const command=(parts.shift()||"").toLowerCase();if(!command)return;if(command==="commands"||command==="help"){const page=Math.max(1,Math.min(commandPages(prefix).length,Number(parts[0])||1));return message.reply({embeds:[commandEmbed(message.guild,page)]});}if(command==="prefix"){if(!message.member.permissions.has(PermissionFlagsBits.ManageGuild))return message.reply("❌ You need Manage Server to change the prefix.");const p=parts[0];if(!p||p.length>5||/\s/.test(p))return message.reply("❌ Prefix must be 1-5 non-space characters.");setPrefix(message.guild,p);return message.reply("✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}return message.reply("ℹ️ Use `/"+command+"` for this action, or `"+prefix+"commands` for the command guide.");});
-client.login(process.env.DISCORD_BOT_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN).then(()=>console.log("Discord login request accepted; waiting for READY event...")).catch(e=>{console.error("Discord login failed:",e);process.exit(1);});
