@@ -11,22 +11,92 @@ const reply = (i, content, ephemeral=true) => i.reply({content,ephemeral,allowed
 const isOwner = i => i.user.id === OWNER_ID;
 const getPrefix = guild => db.prepare("SELECT prefix FROM guild_settings WHERE guild_id=?").get(guild.id)?.prefix || "!";
 const setPrefix = (guild, prefix) => db.prepare("INSERT INTO guild_settings(guild_id,prefix) VALUES(?,?) ON CONFLICT(guild_id) DO UPDATE SET prefix=excluded.prefix").run(guild.id,prefix);
-const commandGuide = prefix => [["help","Show the main moderation help menu","/help","/help"],["commands","Open this interactive command guide","/commands [page]","/commands 2"],["ping","Check the bot's response latency","/ping","/ping"],["botinfo","Show bot information and bio","/botinfo","/botinfo"],["status","Change the bot's activity/status (owner only)","/status <text> [status] [type]","/status Moderating online watching"],["bio","Change the bot bio (owner only)","/bio <text>","/bio Fast and reliable moderation"],["prefix","Change this server's prefix","/prefix <prefix>","/prefix ?"],["serverinfo","Show server information","/serverinfo","/serverinfo"],["channelinfo","Show information about a channel","/channelinfo [channel]","/channelinfo #general"],["userinfo","Show detailed information about a member","/userinfo [user]","/userinfo @Kieran"],["whois","Show member details","/whois <user>","/whois @Kieran"],["avatar","Show a member's avatar","/avatar [user]","/avatar @Kieran"],["created","Show when a Discord account was created","/created <user>","/created @Kieran"],["joined","Show when a member joined the server","/joined <user>","/joined @Kieran"],["membercount","Show the server member count","/membercount","/membercount"],["rolelist","List the server's roles","/rolelist","/rolelist"],["textchannels","List text channels","/textchannels","/textchannels"],["voicechannels","List voice channels","/voicechannels","/voicechannels"],["permissions","Show your server permissions","/permissions","/permissions"],["roleinfo","Show information about a role","/roleinfo <role>","/roleinfo @Moderators"],["rolecolorinfo","Show a role's colour information","/rolecolorinfo <role>","/rolecolorinfo @VIP"],["roleadd","Add a role to a member","/roleadd <user> <role>","/roleadd @Kieran @VIP"],["roleremove","Remove a role from a member","/roleremove <user> <role>","/roleremove @Kieran @VIP"],["nick","Set a member's nickname","/nick <user> [nickname]","/nick @Kieran CoolName"],["setnick","Set a member's nickname","/setnick <user> [nickname]","/setnick @Kieran CoolName"],["nickname","Change a member's nickname","/nickname <user> [nickname]","/nickname @Kieran CoolName"],["voicekick","Disconnect a member from voice","/voicekick <user>","/voicekick @Kieran"],["move","Move a member to another voice channel","/move <user> <channel>","/move @Kieran #Gaming"],["kick","Kick a member from the server","/kick <user> [reason]","/kick @Kieran Spamming"],["ban","Ban a member from the server","/ban <user> [reason]","/ban @Kieran Raiding"],["softban","Ban then immediately unban a member","/softban <user> [reason]","/softban @Kieran Cleaning messages"],["unban","Unban a user by ID","/unban <user_id> [reason]","/unban 123456789012345678 Appeal accepted"],["timeout","Timeout a member for a number of minutes","/timeout <user> <minutes> [reason]","/timeout @Kieran 10 Spamming"],["untimeout","Remove a member's timeout","/untimeout <user> [reason]","/untimeout @Kieran"],["warn","Give a member a warning","/warn <user> [reason]","/warn @Kieran Spamming"],["warnings","View a member's recent warnings","/warnings <user>","/warnings @Kieran"],["clearwarnings","Clear a member's recorded warnings","/clearwarnings <user>","/clearwarnings @Kieran"],["case","View a warning case by ID","/case <id>","/case 42"],["purge","Bulk-delete recent messages","/purge <amount>","/purge 50"],["purgeuser","Delete messages from one member","/purgeuser <user> <amount>","/purgeuser @Kieran 20"],["cleanbot","Delete recent bot messages","/cleanbot <amount>","/cleanbot 50"],["purgeattachments","Delete messages containing attachments","/purgeattachments <amount>","/purgeattachments 30"],["purgeembeds","Delete messages containing embeds","/purgeembeds <amount>","/purgeembeds 30"],["pin","Pin a message using its ID","/pin <message_id>","/pin 123456789012345678"],["unpin","Unpin a message using its ID","/unpin <message_id>","/unpin 123456789012345678"],["unpinall","Unpin all pinned messages in the channel","/unpinall","/unpinall"],["clearreactions","Remove all reactions from a message","/clearreactions <message_id>","/clearreactions 123456789012345678"],["slowmode","Set channel slowmode","/slowmode <seconds>","/slowmode 10"],["slowmodeoff","Disable channel slowmode","/slowmodeoff","/slowmodeoff"],["slowmodecheck","Check the current channel slowmode","/slowmodecheck","/slowmodecheck"],["topic","Set the current channel topic","/topic <topic>","/topic Welcome to our community"],["lock","Lock the current channel","/lock","/lock"],["unlock","Unlock the current channel","/unlock","/unlock"],["lockdown","Lock all text channels","/lockdown","/lockdown"],["unlockdown","Unlock all text channels","/unlockdown","/unlockdown"],["emergencylock","Lock the current channel","/emergencylock","/emergencylock"],["emergencyunlock","Unlock the current channel","/emergencyunlock","/emergencyunlock"],["announce","Send an announcement to a channel","/announce <message> [channel]","/announce Server maintenance tonight"],["say","Make the bot send a message","/say <message>","/say Welcome everyone!"],["embed","Send a custom embed","/embed <title> <description>","/embed Rules Please read #rules"],["audit","View recent audit log entries","/audit [amount]","/audit 5"],["botcheck","Check whether a user is a bot account","/botcheck <user>","/botcheck @ExampleBot"]];
-const commandPages = prefix => {
-  const items = commandGuide(prefix);
-  const pages = [];
-  for (let i=0; i<items.length; i+=8) pages.push(items.slice(i,i+8));
-  return pages;
-};
+const commandPages = prefix => [
+  ["Moderation", [
+    [prefix+"kick <user> [reason]","Kick a member"],
+    [prefix+"ban <user> [reason]","Ban a member"],
+    [prefix+"softban <user> [reason]","Softban a member"],
+    [prefix+"unban <user_id>","Unban a user"],
+    [prefix+"timeout <user> <minutes>","Timeout a member"],
+    [prefix+"untimeout <user>","Remove a timeout"],
+    [prefix+"warn <user> [reason]","Warn a member"],
+    [prefix+"warnings <user>","View warnings"],
+    [prefix+"clearwarnings <user>","Clear warnings"],
+    [prefix+"case <id>","View a warning case"]
+  ]],
+  ["Messages & Channels", [
+    [prefix+"purge <amount>","Delete recent messages"],
+    [prefix+"purgeuser <user> <amount>","Delete a user's messages"],
+    [prefix+"cleanbot <amount>","Delete bot messages"],
+    [prefix+"purgeattachments <amount>","Delete messages with attachments"],
+    [prefix+"purgeembeds <amount>","Delete messages with embeds"],
+    [prefix+"slowmode <seconds>","Set slowmode"],
+    [prefix+"slowmodeoff","Disable slowmode"],
+    [prefix+"slowmodecheck","Check slowmode"],
+    [prefix+"lock","Lock current channel"],
+    [prefix+"unlock","Unlock current channel"],
+    [prefix+"pin <message_id>","Pin a message"],
+    [prefix+"unpin <message_id>","Unpin a message"],
+    [prefix+"unpinall","Unpin all messages"],
+    [prefix+"clearreactions <message_id>","Clear reactions"]
+  ]],
+  ["Members & Roles", [
+    [prefix+"userinfo [user]","Show member information"],
+    [prefix+"whois <user>","Show member details"],
+    [prefix+"avatar [user]","Show an avatar"],
+    [prefix+"roleinfo <role>","Show role information"],
+    [prefix+"rolecolorinfo <role>","Show role colour"],
+    [prefix+"roleadd <user> <role>","Add a role"],
+    [prefix+"roleremove <user> <role>","Remove a role"],
+    [prefix+"nick <user> <name>","Set a nickname"],
+    [prefix+"nickname <user> <name>","Change a nickname"],
+    [prefix+"voicekick <user>","Disconnect from voice"],
+    [prefix+"move <user> <channel>","Move a member"]
+  ]],
+  ["Server & Utility", [
+    [prefix+"serverinfo","Show server information"],
+    [prefix+"membercount","Show member count"],
+    [prefix+"rolelist","List roles"],
+    [prefix+"textchannels","List text channels"],
+    [prefix+"voicechannels","List voice channels"],
+    [prefix+"created <user>","Show account creation time"],
+    [prefix+"joined <user>","Show server join time"],
+    [prefix+"permissions","Show permissions"],
+    [prefix+"audit","Show audit log"],
+    [prefix+"modstats","Show moderation totals"],
+    [prefix+"botcheck <user>","Check if a user is a bot"]
+  ]],
+  ["Channels", [
+    [prefix+"lockdown","Lock text channels"],
+    [prefix+"unlockdown","Unlock text channels"],
+    [prefix+"emergencylock","Lock current channel"],
+    [prefix+"emergencyunlock","Unlock current channel"],
+    [prefix+"topic <topic>","Set channel topic"],
+    [prefix+"announce <message> [channel]","Post an announcement"],
+    [prefix+"say <message>","Send a bot message"],
+    [prefix+"embed <title> <description>","Send an embed"]
+  ]],
+  ["Bot & Help", [
+    [prefix+"commands [page]","Open command guide"],
+    [prefix+"help","Open command guide"],
+    [prefix+"prefix <new>","Change this server prefix"],
+    ["/status <text>","Change bot activity (owner)"],
+    ["/bio <text>","Change bot bio (owner)"],
+    ["/botinfo","Show bot information"],
+    ["/ping","Check bot latency"]
+  ]]
+];
+
 const commandEmbed = (guild,page=1) => {
   const pages = commandPages(getPrefix(guild));
   const p = Math.max(1,Math.min(pages.length,page));
   const data = pages[p-1];
-  const description = data.map(([name,desc,usage,example]) =>
-    "** /"+name+" ** — "+desc+"\n> **How to use:** "+usage+"\n> **Example:** "+example
-  ).join("\n");
-  return new EmbedBuilder().setTitle("🛡️ Command Guide • Page "+p+"/"+pages.length).setDescription(description).setFooter({text:"Use /commands <page> or the buttons below to browse every command."});
+  return new EmbedBuilder()
+    .setTitle("🛡️ Commands • Page "+p+"/"+pages.length+" • "+data[0])
+    .setDescription(data[1].map(x=>"**"+x[0]+"** — "+x[1]).join("\n"))
+    .setFooter({text:"Use "+getPrefix(guild)+"commands <page> or the buttons below."});
 };
+
 const commandButtons = (guild,page=1) => {
   const total = commandPages(getPrefix(guild)).length;
   return new ActionRowBuilder().addComponents(
