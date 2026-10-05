@@ -33,6 +33,11 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS admins (
         user_id TEXT PRIMARY KEY
     );
+
+    CREATE TABLE IF NOT EXISTS bot_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
 `);
 
 module.exports = db;
