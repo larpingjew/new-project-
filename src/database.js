@@ -3,16 +3,9 @@ const fs = require("fs");
 const path = require("path");
 
 const dataFolder = path.join(process.cwd(), "data");
+if (!fs.existsSync(dataFolder)) fs.mkdirSync(dataFolder, { recursive: true });
 
-if (!fs.existsSync(dataFolder)) {
-    fs.mkdirSync(dataFolder, { recursive: true });
-}
-
-const db = new Database(
-    process.env.DATABASE_PATH ||
-    path.join(dataFolder, "emojipack.db")
-);
-
+const db = new Database(process.env.DATABASE_PATH || path.join(dataFolder, "emojipack.db"));
 db.pragma("journal_mode = WAL");
 
 db.exec(`
@@ -21,7 +14,6 @@ db.exec(`
         created_at INTEGER NOT NULL,
         creator_id TEXT NOT NULL
     );
-
     CREATE TABLE IF NOT EXISTS emojis (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         pack_name TEXT NOT NULL,
@@ -29,15 +21,22 @@ db.exec(`
         emoji_id TEXT NOT NULL,
         emoji_animated INTEGER NOT NULL DEFAULT 0
     );
-
     CREATE TABLE IF NOT EXISTS admins (
         user_id TEXT PRIMARY KEY
     );
-
     CREATE TABLE IF NOT EXISTS bot_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS warnings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        moderator_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
 `);
 
 module.exports = db;
