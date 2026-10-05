@@ -9,6 +9,17 @@ const reasonFor = i => (i.options.getString("reason") || "No reason provided").s
 const memberFor = async (i, name="user") => i.guild.members.fetch(i.options.getUser(name).id);
 const reply = (i, content, ephemeral=true) => i.reply({content,ephemeral,allowedMentions:{parse:[]}});
 const isOwner = i => i.user.id === OWNER_ID;
+const getPrefix = guild => db.prepare("SELECT prefix FROM guild_settings WHERE guild_id=?").get(guild.id)?.prefix || "!";
+const setPrefix = (guild, prefix) => db.prepare("INSERT INTO guild_settings(guild_id,prefix) VALUES(?,?) ON CONFLICT(guild_id) DO UPDATE SET prefix=excluded.prefix").run(guild.id,prefix);
+const commandPages = prefix => [[
+  ["Moderation", [[prefix+"kick <user> [reason]","Kick a member"],[prefix+"ban <user> [reason]","Ban a member"],[prefix+"softban <user> [reason]","Softban a member"],[prefix+"unban <user_id>","Unban a user"],[prefix+"timeout <user> <minutes>","Timeout a member"],[prefix+"untimeout <user>","Remove a timeout"],[prefix+"warn <user> [reason]","Warn a member"],[prefix+"warnings <user>","View warnings"],[prefix+"clearwarnings <user>","Clear warnings"]]],
+  ["Messages & Channels", [[prefix+"purge <amount>","Delete recent messages"],[prefix+"purgeuser <user> <amount>","Delete a user messages"],[prefix+"cleanbot <amount>","Delete bot messages"],[prefix+"purgeattachments <amount>","Delete messages with attachments"],[prefix+"purgeembeds <amount>","Delete messages with embeds"],[prefix+"slowmode <seconds>","Set slowmode"],[prefix+"lock","Lock current channel"],[prefix+"unlock","Unlock current channel"],[prefix+"pin <message_id>","Pin a message"],[prefix+"unpin <message_id>","Unpin a message"],[prefix+"unpinall","Unpin all messages"]]],
+  ["Members & Roles", [[prefix+"userinfo [user]","Show member information"],[prefix+"avatar [user]","Show an avatar"],[prefix+"roleinfo <role>","Show role information"],[prefix+"roleadd <user> <role>","Add a role"],[prefix+"roleremove <user> <role>","Remove a role"],[prefix+"nick <user> <name>","Set a nickname"],[prefix+"voicekick <user>","Disconnect from voice"],[prefix+"move <user> <channel>","Move a member"]]],
+  ["Server & Utility", [[prefix+"serverinfo","Show server information"],[prefix+"membercount","Show member count"],[prefix+"rolelist","List roles"],[prefix+"textchannels","List text channels"],[prefix+"voicechannels","List voice channels"],[prefix+"created <user>","Show account creation time"],[prefix+"joined <user>","Show server join time"],[prefix+"permissions","Show permissions"],[prefix+"audit","Show audit log"],[prefix+"modstats","Show moderation totals"]]],
+  ["Channels", [[prefix+"lockdown","Lock text channels"],[prefix+"unlockdown","Unlock text channels"],[prefix+"emergencylock","Lock current channel"],[prefix+"emergencyunlock","Unlock current channel"],[prefix+"slowmodeoff","Disable slowmode"],[prefix+"slowmodecheck","Check slowmode"],[prefix+"topic <topic>","Set channel topic"],[prefix+"clearreactions <message_id>","Clear reactions"]]],
+  ["Bot & Help", [[prefix+"commands [page]","Open command guide"],[prefix+"help","Open command guide"],["/status","Change bot activity (owner)"],["/bio","Change bot bio (owner)"],["/prefix <new>","Change this server prefix"]]]
+];
+const commandEmbed = (guild,page=1) => { const pages=commandPages(getPrefix(guild)); const p=Math.max(1,Math.min(pages.length,page)); const data=pages[p-1]; return new EmbedBuilder().setTitle("🛡️ Commands • Page "+p+"/"+pages.length+" • "+data[0]).setDescription(data[1].map(x=>"**"+x[0]+"** — "+x[1]).join("\n")).setFooter({text:"Use "+getPrefix(guild)+"commands <page> for another page."}); };
 function presence() {
   if (!client.user) return;
   const types = {playing:ActivityType.Playing,listening:ActivityType.Listening,watching:ActivityType.Watching,competing:ActivityType.Competing};
@@ -19,6 +30,8 @@ client.on("interactionCreate",async i=>{
   if(!i.isChatInputCommand()) return;
   try {
     const n=i.commandName, sub=i.options.getSubcommand(false);
+    if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],ephemeral:true});}
+    if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
     if(["help","modhelp"].includes(n)){
       const groups=[
         ["Moderation","/kick /ban /softban /unban /timeout /untimeout /warn /warnings /clearwarnings /case"],
@@ -97,4 +110,5 @@ client.on("interactionCreate",async i=>{
     else await i.reply({content:`❌ ${msg}`,ephemeral:true}).catch(()=>{});
   }
 });
+client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;const prefix=getPrefix(message.guild);if(!message.content.startsWith(prefix))return;const parts=message.content.slice(prefix.length).trim().split(/\s+/);const command=(parts.shift()||"").toLowerCase();if(!command)return;if(command==="commands"||command==="help"){const page=Math.max(1,Math.min(commandPages(prefix).length,Number(parts[0])||1));return message.reply({embeds:[commandEmbed(message.guild,page)]});}if(command==="prefix"){if(!message.member.permissions.has(PermissionFlagsBits.ManageGuild))return message.reply("❌ You need Manage Server to change the prefix.");const p=parts[0];if(!p||p.length>5||/\s/.test(p))return message.reply("❌ Prefix must be 1-5 non-space characters.");setPrefix(message.guild,p);return message.reply("✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}return message.reply("ℹ️ Use `/"+command+"` for this action, or `"+prefix+"commands` for the command guide.");});
 client.login(process.env.DISCORD_BOT_TOKEN);
