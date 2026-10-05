@@ -13,7 +13,7 @@ async function askAI(channel, message) {
     method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
     body:JSON.stringify({
-      model:"gpt-5.6",
+      model:"gpt-6-luna",
       input:[
         {role:"developer",content:"You are a helpful, friendly AI assistant inside a Discord server. Have natural conversations, answer questions, and keep replies concise."},
         ...recent
