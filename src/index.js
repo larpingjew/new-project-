@@ -1,4 +1,34 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+
+const aiMemory = new Map();
+const aiSettingKey = guildId => "ai_channel_"+guildId;
+
+async function askAI(channel, message) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY is not configured in Railway Variables.");
+  const history = aiMemory.get(channel.id) || [];
+  history.push({role:"user",content:message.author.username+": "+message.content.slice(0,2000)});
+  const recent = history.slice(-12);
+  const response = await fetch("https://api.openai.com/v1/responses",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    body:JSON.stringify({
+      model:"gpt-5.6",
+      input:[
+        {role:"developer",content:"You are a helpful, friendly AI assistant inside a Discord server. Have natural conversations, answer questions, and keep replies concise."},
+        ...recent
+      ],
+      max_output_tokens:700
+    })
+  });
+  const data = await response.json();
+  if(!response.ok) throw new Error(data.error?.message || "OpenAI API request failed.");
+  const answer = data.output_text || "I couldn't generate a response.";
+  history.push({role:"assistant",content:answer});
+  aiMemory.set(channel.id,history.slice(-12));
+  return answer;
+}
+
 const db = require("./database");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent] });
@@ -127,7 +157,15 @@ client.on("interactionCreate",async i=>{
       return i.reply({content:"❌ I couldn't change the command guide page.",ephemeral:true}).catch(()=>{});
     }
   }
-  if(!i.isChatInputCommand()) return;
+      if(n==="ai" && sub==="reply"){
+      if(!i.guild)return reply(i,"Use this command inside a server.");
+      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure the AI channel.");
+      const channel=i.options.getChannel("channel");
+      setSetting(aiSettingKey(i.guild.id),channel.id);
+      aiMemory.delete(channel.id);
+      return reply(i,"🤖 AI replies enabled in "+channel.toString()+". Talk in that channel and I will reply.");
+    }
+if(!i.isChatInputCommand()) return;
   try {
     const n=i.commandName, sub=i.options.getSubcommand(false);
     if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],ephemeral:true});}
@@ -210,5 +248,18 @@ client.on("interactionCreate",async i=>{
     else await i.reply({content:`❌ ${msg}`,ephemeral:true}).catch(()=>{});
   }
 });
-client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;const prefix=getPrefix(message.guild);if(!message.content.startsWith(prefix))return;const parts=message.content.slice(prefix.length).trim().split(/\s+/);const command=(parts.shift()||"").toLowerCase();if(!command)return;if(command==="commands"||command==="help"){const page=Math.max(1,Math.min(commandPages(prefix).length,Number(parts[0])||1));return message.reply({embeds:[commandEmbed(message.guild,page)],components:[commandButtons(message.guild,page)]});}if(command==="prefix"){if(!message.member.permissions.has(PermissionFlagsBits.ManageGuild))return message.reply("❌ You need Manage Server to change the prefix.");const p=parts[0];if(!p||p.length>5||/\s/.test(p))return message.reply("❌ Prefix must be 1-5 non-space characters.");setPrefix(message.guild,p);return message.reply("✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}return message.reply("ℹ️ Use `/"+command+"` for this action, or `"+prefix+"commands` for the command guide.");});
+client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;
+const aiChannelId=setting(aiSettingKey(message.guild.id));
+if(aiChannelId===message.channel.id){
+  if(!process.env.OPENAI_API_KEY)return message.reply("⚠️ AI is not configured yet. The bot owner needs to add OPENAI_API_KEY to Railway Variables.");
+  try{
+    await message.channel.sendTyping();
+    const answer=await askAI(message.channel,message);
+    for(let i=0;i<answer.length;i+=1900) await message.reply(answer.slice(i,i+1900));
+  }catch(e){
+    console.error("AI reply failed:",e);
+    await message.reply("❌ I couldn't get an AI response right now.").catch(()=>{});
+  }
+  return;
+}const prefix=getPrefix(message.guild);if(!message.content.startsWith(prefix))return;const parts=message.content.slice(prefix.length).trim().split(/\s+/);const command=(parts.shift()||"").toLowerCase();if(!command)return;if(command==="commands"||command==="help"){const page=Math.max(1,Math.min(commandPages(prefix).length,Number(parts[0])||1));return message.reply({embeds:[commandEmbed(message.guild,page)],components:[commandButtons(message.guild,page)]});}if(command==="prefix"){if(!message.member.permissions.has(PermissionFlagsBits.ManageGuild))return message.reply("❌ You need Manage Server to change the prefix.");const p=parts[0];if(!p||p.length>5||/\s/.test(p))return message.reply("❌ Prefix must be 1-5 non-space characters.");setPrefix(message.guild,p);return message.reply("✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}return message.reply("ℹ️ Use `/"+command+"` for this action, or `"+prefix+"commands` for the command guide.");});
 client.login(process.env.DISCORD_BOT_TOKEN).then(()=>console.log("Discord login request accepted; waiting for READY event...")).catch(e=>{console.error("Discord login failed:",e);process.exit(1);});
