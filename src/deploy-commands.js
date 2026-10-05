@@ -9,102 +9,40 @@ const commands = [
     new SlashCommandBuilder()
         .setName("emojipack")
         .setDescription("Manage EmojiPacks")
-
         .addSubcommand(sub =>
-            sub
-                .setName("upload")
+            sub.setName("upload")
                 .setDescription("Create an EmojiPack with up to 50 emojis")
-
-                .addStringOption(option =>
-                    option
-                        .setName("name")
-                        .setDescription("The name of the EmojiPack")
-                        .setRequired(true)
-                )
-
-                .addStringOption(option =>
-                    option
-                        .setName("emojis")
-                        .setDescription("Paste up to 50 custom Discord emojis")
-                        .setRequired(true)
-                )
+                .addStringOption(option => option.setName("name").setDescription("The name of the EmojiPack").setRequired(true))
+                .addStringOption(option => option.setName("emojis").setDescription("Paste up to 50 custom Discord emojis").setRequired(true))
         )
-
         .addSubcommand(sub =>
-            sub
-                .setName("load")
+            sub.setName("load")
                 .setDescription("Load an EmojiPack into a server")
-
-                .addStringOption(option =>
-                    option
-                        .setName("name")
-                        .setDescription("EmojiPack name")
-                        .setRequired(true)
-                )
-
-                .addStringOption(option =>
-                    option
-                        .setName("server_id")
-                        .setDescription("Server ID to load the pack into")
-                        .setRequired(true)
-                )
+                .addStringOption(option => option.setName("name").setDescription("EmojiPack name").setRequired(true))
+                .addStringOption(option => option.setName("server_id").setDescription("Server ID to load the pack into").setRequired(true))
         )
-
         .addSubcommand(sub =>
-            sub
-                .setName("view")
+            sub.setName("view")
                 .setDescription("View the emojis inside an EmojiPack")
-
-                .addStringOption(option =>
-                    option
-                        .setName("name")
-                        .setDescription("EmojiPack name")
-                        .setRequired(true)
-                )
+                .addStringOption(option => option.setName("name").setDescription("EmojiPack name").setRequired(true))
         )
-
         .addSubcommand(sub =>
-            sub
-                .setName("delete")
+            sub.setName("delete")
                 .setDescription("Delete an EmojiPack")
-
-                .addStringOption(option =>
-                    option
-                        .setName("name")
-                        .setDescription("EmojiPack name")
-                        .setRequired(true)
-                )
+                .addStringOption(option => option.setName("name").setDescription("EmojiPack name").setRequired(true))
         )
-
         .addSubcommandGroup(group =>
-            group
-                .setName("admin")
+            group.setName("admin")
                 .setDescription("Manage EmojiPack admins")
-
                 .addSubcommand(sub =>
-                    sub
-                        .setName("add")
+                    sub.setName("add")
                         .setDescription("Add an EmojiPack admin")
-
-                        .addUserOption(option =>
-                            option
-                                .setName("user")
-                                .setDescription("User to make an admin")
-                                .setRequired(true)
-                        )
+                        .addUserOption(option => option.setName("user").setDescription("User to make an admin").setRequired(true))
                 )
-
                 .addSubcommand(sub =>
-                    sub
-                        .setName("remove")
+                    sub.setName("remove")
                         .setDescription("Remove an EmojiPack admin")
-
-                        .addUserOption(option =>
-                            option
-                                .setName("user")
-                                .setDescription("User to remove")
-                                .setRequired(true)
-                        )
+                        .addUserOption(option => option.setName("user").setDescription("User to remove").setRequired(true))
                 )
         ),
 
@@ -119,46 +57,26 @@ const commands = [
     new SlashCommandBuilder()
         .setName("status")
         .setDescription("Change the bot's Discord status and activity")
-        .addStringOption(option =>
-            option
-                .setName("text")
-                .setDescription("Activity text")
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option
-                .setName("status")
-                .setDescription("Online status")
-                .setRequired(false)
-                .addChoices(
-                    { name: "Online", value: "online" },
-                    { name: "Idle", value: "idle" },
-                    { name: "Do Not Disturb", value: "dnd" },
-                    { name: "Invisible", value: "invisible" }
-                )
-        )
-        .addStringOption(option =>
-            option
-                .setName("type")
-                .setDescription("Activity type")
-                .setRequired(false)
-                .addChoices(
-                    { name: "Playing", value: "playing" },
-                    { name: "Listening to", value: "listening" },
-                    { name: "Watching", value: "watching" },
-                    { name: "Competing in", value: "competing" }
-                )
-        ),
+        .addStringOption(option => option.setName("text").setDescription("Activity text").setRequired(true))
+        .addStringOption(option => option.setName("status").setDescription("Online status").setRequired(false)
+            .addChoices(
+                { name: "Online", value: "online" },
+                { name: "Idle", value: "idle" },
+                { name: "Do Not Disturb", value: "dnd" },
+                { name: "Invisible", value: "invisible" }
+            ))
+        .addStringOption(option => option.setName("type").setDescription("Activity type").setRequired(false)
+            .addChoices(
+                { name: "Playing", value: "playing" },
+                { name: "Listening to", value: "listening" },
+                { name: "Watching", value: "watching" },
+                { name: "Competing in", value: "competing" }
+            )),
 
     new SlashCommandBuilder()
         .setName("bio")
         .setDescription("Set the bot's custom bio")
-        .addStringOption(option =>
-            option
-                .setName("text")
-                .setDescription("Bio text")
-                .setRequired(true)
-        ),
+        .addStringOption(option => option.setName("text").setDescription("Bio text").setRequired(true)),
 
     new SlashCommandBuilder()
         .setName("botinfo")
@@ -166,28 +84,35 @@ const commands = [
 
 ].map(command => command.toJSON());
 
-const rest = new REST({ version: "10" })
-    .setToken(process.env.DISCORD_BOT_TOKEN);
+const token = process.env.DISCORD_BOT_TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID;
+const guildId = process.env.GUILD_ID;
+
+if (!token || !clientId) {
+    console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID in Railway variables.");
+    process.exit(1);
+}
+
+const rest = new REST({ version: "10" }).setToken(token);
 
 (async () => {
     try {
+        const route = guildId
+            ? Routes.applicationGuildCommands(clientId, guildId)
+            : Routes.applicationCommands(clientId);
 
-        console.log("Registering EmojiPack slash commands...");
-
-        await rest.put(
-            Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-            {
-                body: commands
-            }
+        console.log(guildId
+            ? `Registering ${commands.length} slash commands to guild ${guildId}...`
+            : `Registering ${commands.length} global slash commands...`
         );
 
-        console.log("EmojiPack slash commands registered!");
+        await rest.put(route, { body: commands });
+
+        console.log("Slash commands registered successfully.");
 
     } catch (error) {
-
         console.error("Failed to register slash commands:");
         console.error(error);
-
         process.exit(1);
     }
 })();
