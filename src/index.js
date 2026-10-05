@@ -36,6 +36,36 @@ function isAdmin(userId) {
     return !!admin;
 }
 
+const { ActivityType } = require("discord.js");
+
+function getSetting(key, fallback = "") {
+    const row = db.prepare("SELECT value FROM bot_settings WHERE key = ?").get(key);
+    return row ? row.value : fallback;
+}
+
+function setSetting(key, value) {
+    db.prepare(`INSERT INTO bot_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, String(value));
+}
+
+function applyBotPresence() {
+    if (!client.user) return;
+    const text = getSetting("status_text", "EmojiPack");
+    const status = getSetting("status_state", "online");
+    const type = getSetting("status_type", "playing");
+    const types = {
+        playing: ActivityType.Playing,
+        listening: ActivityType.Listening,
+        watching: ActivityType.Watching,
+        competing: ActivityType.Competing
+    };
+    client.user.setPresence({
+        status,
+        activities: text ? [{ name: text, type: types[type] ?? ActivityType.Playing }] : []
+    });
+}
+
 // ==========================================
 // PARSE DISCORD EMOJIS
 // ==========================================
@@ -189,6 +219,8 @@ client.once("ready", () => {
 
     console.log("--------------------------------");
     console.log(`Logged in as ${client.user.tag}`);
+    applyBotPresence();
+
     console.log("EmojiPack is online!");
     console.log("--------------------------------");
 
@@ -260,6 +292,39 @@ client.on("interactionCreate", async interaction => {
                 embeds: [embed],
                 ephemeral: true
             });
+        }
+
+        if (interaction.commandName === "status") {
+            if (!isOwner(interaction.user.id)) return interaction.reply({ content: "❌ Only the bot owner can change the bot status.", ephemeral: true });
+            const text = interaction.options.getString("text").trim();
+            const status = interaction.options.getString("status") ?? getSetting("status_state", "online");
+            const type = interaction.options.getString("type") ?? getSetting("status_type", "playing");
+            if (text.length < 1 || text.length > 128) return interaction.reply({ content: "❌ Status text must be between 1 and 128 characters.", ephemeral: true });
+            setSetting("status_text", text);
+            setSetting("status_state", status);
+            setSetting("status_type", type);
+            applyBotPresence();
+            return interaction.reply(`✅ Bot status updated.\n\n**${status}** • **${type}** • ${text}`);
+        }
+
+        if (interaction.commandName === "bio") {
+            if (!isOwner(interaction.user.id)) return interaction.reply({ content: "❌ Only the bot owner can change the bot bio.", ephemeral: true });
+            const text = interaction.options.getString("text").trim();
+            if (text.length < 1 || text.length > 500) return interaction.reply({ content: "❌ Bio must be between 1 and 500 characters.", ephemeral: true });
+            setSetting("bio", text);
+            return interaction.reply(`✅ Bot bio updated.\n\n**Bio:** ${text}`);
+        }
+
+        if (interaction.commandName === "botinfo") {
+            const embed = new EmbedBuilder()
+                .setTitle(`🤖 ${client.user?.username ?? "EmojiPack"}`)
+                .addFields(
+                    { name: "🟢 Status", value: getSetting("status_state", "online"), inline: true },
+                    { name: "🎮 Activity", value: `${getSetting("status_type", "playing")}: ${getSetting("status_text", "EmojiPack")}`, inline: true },
+                    { name: "📝 Bio", value: getSetting("bio", "No bio has been set.") }
+                )
+                .setTimestamp();
+            return interaction.reply({ embeds: [embed] });
         }
 
         // ======================================
