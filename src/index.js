@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
 
 const aiMemory = new Map();
 const aiSettingKey = guildId => "ai_channel_"+guildId;
@@ -37,7 +37,7 @@ const setting = key => db.prepare("SELECT value FROM bot_settings WHERE key=?").
 const setSetting = (key,value) => db.prepare("INSERT INTO bot_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(key,String(value));
 const reasonFor = i => (i.options.getString("reason") || "No reason provided").slice(0,500);
 const memberFor = async (i, name="user") => i.guild.members.fetch(i.options.getUser(name).id);
-const reply = (i, content, ephemeral=true) => i.reply({content,ephemeral,allowedMentions:{parse:[]}});
+const reply = (i, content, ephemeral=true) => i.reply({content,flags:ephemeral ? MessageFlags.Ephemeral : undefined,allowedMentions:{parse:[]}});
 const isOwner = i => i.user.id === OWNER_ID;
 const getPrefix = guild => db.prepare("SELECT prefix FROM guild_settings WHERE guild_id=?").get(guild.id)?.prefix || "!";
 const setPrefix = (guild, prefix) => db.prepare("INSERT INTO guild_settings(guild_id,prefix) VALUES(?,?) ON CONFLICT(guild_id) DO UPDATE SET prefix=excluded.prefix").run(guild.id,prefix);
@@ -154,7 +154,7 @@ client.on("interactionCreate",async i=>{
       return i.update({embeds:[commandEmbed(i.guild,next)],components:[commandButtons(i.guild,next)]});
     } catch(e) {
       console.error("Command guide button failed:",e);
-      return i.reply({content:"❌ I couldn't change the command guide page.",ephemeral:true}).catch(()=>{});
+      return i.reply({content:"❌ I couldn't change the command guide page.",flags:MessageFlags.Ephemeral}).catch(()=>{});
     }
   }
 if(!i.isChatInputCommand()) return;
@@ -168,7 +168,7 @@ if(!i.isChatInputCommand()) return;
       aiMemory.delete(channel.id);
       return reply(i,"🤖 AI replies enabled in "+channel.toString()+". Talk in that channel and I will reply.");
     }
-    if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],ephemeral:true});}
+    if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],flags:MessageFlags.Ephemeral});}
     if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
     if(["help","modhelp"].includes(n)){
       const groups=[
@@ -178,7 +178,7 @@ if(!i.isChatInputCommand()) return;
         ["Server tools","/serverinfo /channelinfo /membercount /textchannels /voicechannels /announce /say /embed /audit /modstats /botcheck"],
         ["Bot","/ping /botinfo /status /bio"]
       ];
-      return i.reply({embeds:[new EmbedBuilder().setTitle("🛡️ Moderation Bot").setDescription(groups.map(([t,v])=>`**${t}**\n${v}`).join("\n\n")).setFooter({text:"Commands require the appropriate Discord permissions."})],ephemeral:true});
+      return i.reply({embeds:[new EmbedBuilder().setTitle("🛡️ Moderation Bot").setDescription(groups.map(([t,v])=>`**${t}**\n${v}`).join("\n\n")).setFooter({text:"Commands require the appropriate Discord permissions."})],flags:MessageFlags.Ephemeral});
     }
     if(n==="ping") return reply(i,`🏓 Pong! ${client.ws.ping}ms`,false);
     if(n==="status"){
@@ -190,7 +190,7 @@ if(!i.isChatInputCommand()) return;
       if(!isOwner(i)) return reply(i,"Only the bot owner can change the bot bio.");
       const text=i.options.getString("text").slice(0,500);setSetting("bio",text);return reply(i,"✅ Bot bio updated.");
     }
-    if(n==="botinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(client.user.username).setDescription(setting("bio")||"Moderation bot").addFields({name:"Servers",value:String(client.guilds.cache.size),inline:true},{name:"Ping",value:`${client.ws.ping}ms`,inline:true})],ephemeral:true});
+    if(n==="botinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(client.user.username).setDescription(setting("bio")||"Moderation bot").addFields({name:"Servers",value:String(client.guilds.cache.size),inline:true},{name:"Ping",value:`${client.ws.ping}ms`,inline:true})],flags:MessageFlags.Ephemeral});
     if(!i.guild) return reply(i,"Use this command inside a server.");
     const g=i.guild, me=await g.members.fetchMe();
     const need=(permission)=>{if(!i.memberPermissions?.has(permission)) throw new Error(`You need ${permission.toLowerCase().replace(/([A-Z])/g," $1")} permission.`);};
@@ -201,14 +201,14 @@ if(!i.isChatInputCommand()) return;
     const reason=reasonFor(i);
     const warn=(userId,why)=>db.prepare("INSERT INTO warnings(guild_id,user_id,moderator_id,reason,created_at) VALUES(?,?,?,?,?)").run(g.id,userId,i.user.id,why,Date.now());
     const fetchChannel=()=>i.options.getChannel("channel",false)||i.channel;
-    if(n==="serverinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(g.name).setThumbnail(g.iconURL()).addFields({name:"Server ID",value:g.id,inline:true},{name:"Members",value:String(g.memberCount),inline:true},{name:"Created",value:`<t:${Math.floor(g.createdTimestamp/1000)}:D>`,inline:true})],ephemeral:true});
+    if(n==="serverinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(g.name).setThumbnail(g.iconURL()).addFields({name:"Server ID",value:g.id,inline:true},{name:"Members",value:String(g.memberCount),inline:true},{name:"Created",value:`<t:${Math.floor(g.createdTimestamp/1000)}:D>`,inline:true})],flags:MessageFlags.Ephemeral});
     if(["userinfo","whois","created","joined","avatar","botcheck"].includes(n)){
       const user=i.options.getUser("user",false)||i.user, m=await g.members.fetch(user.id).catch(()=>null);
-      if(n==="avatar") return i.reply({content:user.displayAvatarURL({size:1024}),ephemeral:true});
+      if(n==="avatar") return i.reply({content:user.displayAvatarURL({size:1024}),flags:MessageFlags.Ephemeral});
       if(n==="created") return reply(i,`**${user.tag}** account created <t:${Math.floor(user.createdTimestamp/1000)}:F>.`);
       if(n==="joined") return reply(i,m?`**${user.tag}** joined <t:${Math.floor(m.joinedTimestamp/1000)}:F>.`:"That user is not in this server.");
       if(n==="botcheck") return reply(i,user.bot?`${user.tag} is a bot account.`:`${user.tag} is not a bot account.`);
-      return i.reply({embeds:[new EmbedBuilder().setTitle(user.tag).setThumbnail(user.displayAvatarURL({size:512})).addFields({name:"User ID",value:user.id,inline:true},{name:"Bot account",value:String(user.bot),inline:true},{name:"Account created",value:`<t:${Math.floor(user.createdTimestamp/1000)}:F>`},{name:"Server nickname",value:m?.nickname||"None",inline:true},{name:"Joined server",value:m?.joinedTimestamp?`<t:${Math.floor(m.joinedTimestamp/1000)}:F>`:"Not a member",inline:true},{name:"Roles",value:m?m.roles.cache.filter(r=>r.id!==g.id).map(r=>r.toString()).slice(0,15).join(" ")||"None":"Not a member"} )],ephemeral:true});
+      return i.reply({embeds:[new EmbedBuilder().setTitle(user.tag).setThumbnail(user.displayAvatarURL({size:512})).addFields({name:"User ID",value:user.id,inline:true},{name:"Bot account",value:String(user.bot),inline:true},{name:"Account created",value:`<t:${Math.floor(user.createdTimestamp/1000)}:F>`},{name:"Server nickname",value:m?.nickname||"None",inline:true},{name:"Joined server",value:m?.joinedTimestamp?`<t:${Math.floor(m.joinedTimestamp/1000)}:F>`:"Not a member",inline:true},{name:"Roles",value:m?m.roles.cache.filter(r=>r.id!==g.id).map(r=>r.toString()).slice(0,15).join(" ")||"None":"Not a member"} )],flags:MessageFlags.Ephemeral});
     }
     if(n==="membercount") return reply(i,`👥 This server has **${g.memberCount}** members.`);
     if(n==="permissions") return reply(i,`Your server permissions: ${i.memberPermissions.toArray().join(", ")||"None"}`);
@@ -244,8 +244,8 @@ if(!i.isChatInputCommand()) return;
   } catch(e) {
     console.error(`Command ${i.commandName} failed:`,e);
     const msg=e.code===50013?"I lack a required permission. Check my server permissions and role position.":e.code===10007?"That member could not be found.":e.code===10008?"That message could not be found.":e.message||"Unexpected error.";
-    if(i.deferred||i.replied) await i.followUp({content:`❌ ${msg}`,ephemeral:true}).catch(()=>{});
-    else await i.reply({content:`❌ ${msg}`,ephemeral:true}).catch(()=>{});
+    if(i.deferred||i.replied) await i.followUp({content:`❌ ${msg}`,flags:MessageFlags.Ephemeral}).catch(()=>{});
+    else await i.reply({content:`❌ ${msg}`,flags:MessageFlags.Ephemeral}).catch(()=>{});
   }
 });
 client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;
