@@ -114,7 +114,55 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName("help")
-        .setDescription("View EmojiPack commands")
+        .setDescription("View EmojiPack commands"),
+
+    new SlashCommandBuilder()
+        .setName("status")
+        .setDescription("Change the bot's Discord status and activity")
+        .addStringOption(option =>
+            option
+                .setName("text")
+                .setDescription("Activity text")
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option
+                .setName("status")
+                .setDescription("Online status")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Online", value: "online" },
+                    { name: "Idle", value: "idle" },
+                    { name: "Do Not Disturb", value: "dnd" },
+                    { name: "Invisible", value: "invisible" }
+                )
+        )
+        .addStringOption(option =>
+            option
+                .setName("type")
+                .setDescription("Activity type")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Playing", value: "playing" },
+                    { name: "Listening to", value: "listening" },
+                    { name: "Watching", value: "watching" },
+                    { name: "Competing in", value: "competing" }
+                )
+        ),
+
+    new SlashCommandBuilder()
+        .setName("bio")
+        .setDescription("Set the bot's custom bio")
+        .addStringOption(option =>
+            option
+                .setName("text")
+                .setDescription("Bio text")
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName("botinfo")
+        .setDescription("View the bot's current configuration")
 
 ].map(command => command.toJSON());
 
