@@ -171,13 +171,15 @@ if(!i.isChatInputCommand()) return;
     if(n==="automod"){
       if(!i.guild)return reply(i,"Use this command inside a server.");
       if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure AutoMod.");
-      if(!me.permissions.has(PermissionFlagsBits.ManageGuild))return reply(i,"I need Manage Server to create AutoMod rules.");
+      const automodMe=await i.guild.members.fetchMe();
+      if(!automodMe.permissions.has(PermissionFlagsBits.ManageGuild))return reply(i,"I need Manage Server to create AutoMod rules.");
       const subAuto=i.options.getSubcommand(false);
       const rules=await i.guild.autoModerationRules.fetch({cache:false});
       if(subAuto==="status"){
         const mine=rules.filter(r=>r.creatorId===client.user.id);
-        const total=[...client.guilds.cache.values()].reduce((sum,guild)=>sum+guild.autoModerationRules.cache.filter(r=>r.creatorId===client.user.id).size,0);
-        return reply(i,`🛡️ AutoMod rules in this server: **${rules.size}**\n🤖 Rules created by me here: **${mine.size}**\n🌐 My cached rules across servers: **${total}**\n🎯 Badge target: **100 rules across all servers**.`);
+        let total=mine.size;
+        for(const guild of client.guilds.cache.values()){if(guild.id===i.guild.id)continue;try{const other=await guild.autoModerationRules.fetch({cache:false});total+=other.filter(r=>r.creatorId===client.user.id).size;}catch{}}
+        return reply(i,`🛡️ AutoMod rules in this server: **${rules.size}**\n🤖 Rules created by me here: **${mine.size}**\n🌐 My rules across servers: **${total}**\n🎯 Badge target: **100 rules across all servers**.`);
       }
       if(subAuto==="setup"){
         const names=["Emojipack • Commonly Flagged Words","Emojipack • Spam Protection","Emojipack • Mention Spam Protection"];
