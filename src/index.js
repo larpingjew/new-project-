@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AutoModerationRuleTriggerType, AutoModerationRuleEventType, AutoModerationActionType, AutoModerationRuleKeywordPresetType } = require("discord.js");
 
 const aiMemory = new Map();
 const aiSettingKey = guildId => "ai_channel_"+guildId;
@@ -167,6 +167,51 @@ if(!i.isChatInputCommand()) return;
       setSetting(aiSettingKey(i.guild.id),channel.id);
       aiMemory.delete(channel.id);
       return reply(i,"🤖 AI replies enabled in "+channel.toString()+". Talk in that channel and I will reply.");
+    }
+    if(n==="automod"){
+      if(!i.guild)return reply(i,"Use this command inside a server.");
+      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure AutoMod.");
+      if(!me.permissions.has(PermissionFlagsBits.ManageGuild))return reply(i,"I need Manage Server to create AutoMod rules.");
+      const subAuto=i.options.getSubcommand(false);
+      const rules=await i.guild.autoModerationRules.fetch({cache:false});
+      if(subAuto==="status"){
+        const mine=rules.filter(r=>r.creatorId===client.user.id);
+        const total=[...client.guilds.cache.values()].reduce((sum,guild)=>sum+guild.autoModerationRules.cache.filter(r=>r.creatorId===client.user.id).size,0);
+        return reply(i,`🛡️ AutoMod rules in this server: **${rules.size}**\n🤖 Rules created by me here: **${mine.size}**\n🌐 My cached rules across servers: **${total}**\n🎯 Badge target: **100 rules across all servers**.`);
+      }
+      if(subAuto==="setup"){
+        const names=["Emojipack • Commonly Flagged Words","Emojipack • Spam Protection","Emojipack • Mention Spam Protection"];
+        let created=0;
+        if(!rules.some(r=>r.name===names[0])){
+          await i.guild.autoModerationRules.create({name:names[0],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.KeywordPreset,triggerMetadata:{presets:[AutoModerationRuleKeywordPresetType.Profanity,AutoModerationRuleKeywordPresetType.SexualContent,AutoModerationRuleKeywordPresetType.Slurs]},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
+          created++;
+        }
+        if(!rules.some(r=>r.name===names[1])){
+          await i.guild.autoModerationRules.create({name:names[1],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.Spam,actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
+          created++;
+        }
+        if(!rules.some(r=>r.name===names[2])){
+          await i.guild.autoModerationRules.create({name:names[2],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.MentionSpam,triggerMetadata:{mentionTotalLimit:5},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
+          created++;
+        }
+        return reply(i,created?`🛡️ AutoMod setup complete. Created **${created}** useful protection rule(s) in this server. Run \`/automod status\` to check progress.`:"🛡️ AutoMod is already set up in this server. Run \`/automod status\` to check progress.");
+      }
+      if(subAuto==="keyword"){
+        const name=i.options.getString("name").slice(0,100);
+        const raw=i.options.getString("keywords");
+        const keywords=[...new Set(raw.split(",").map(x=>x.trim()).filter(Boolean))].slice(0,1000);
+        if(!keywords.length)return reply(i,"Add at least one keyword.");
+        const customCount=rules.filter(r=>r.triggerType===AutoModerationRuleTriggerType.Keyword).size;
+        if(customCount>=3)return reply(i,"This server already has the maximum 3 custom keyword rules available through this command.");
+        const rule=await i.guild.autoModerationRules.create({name:`Emojipack • ${name}`.slice(0,100),eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.Keyword,triggerMetadata:{keywordFilter:keywords},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack custom AutoMod keyword rule"});
+        return reply(i,`🛡️ Created AutoMod rule **${rule.name}** with **${keywords.length}** keyword(s).`);
+      }
+      if(subAuto==="clear"){
+        const mine=rules.filter(r=>r.creatorId===client.user.id && r.name.startsWith("Emojipack • "));
+        if(!mine.size)return reply(i,"I don't have any AutoMod rules to clear in this server.");
+        for(const rule of mine.values())await rule.delete("EmojiPack AutoMod cleanup");
+        return reply(i,`🧹 Removed **${mine.size}** AutoMod rule(s) created by me in this server.`);
+      }
     }
     if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],flags:MessageFlags.Ephemeral});}
     if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
