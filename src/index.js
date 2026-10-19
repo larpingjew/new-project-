@@ -6,7 +6,11 @@ const {
 } = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 const MESSAGE_TAG = "xq14g is a burger";
@@ -14,96 +18,106 @@ const withTag = content => content.includes(MESSAGE_TAG)
   ? content
   : `${content}\n\n${MESSAGE_TAG}`;
 
+async function addEmojis(guild, raw, requester) {
+  const matches = [...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
+  const unique = [...new Map(matches.map(match => [
+    match[3],
+    { animated: Boolean(match[1]), name: match[2], id: match[3] }
+  ])).values()];
+
+  if (!unique.length) {
+    return "⚠️ I couldn't find any custom emoji mentions. Paste <:name:emoji_id> or <a:name:emoji_id>.";
+  }
+
+  const botMember = await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageEmojisAndStickers)) {
+    return "❌ I need Manage Emojis and Stickers permission.";
+  }
+
+  let added = 0;
+  let failed = 0;
+  const errors = [];
+
+  for (const emoji of unique) {
+    try {
+      const extension = emoji.animated ? "gif" : "png";
+      await guild.emojis.create({
+        attachment: `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,
+        name: emoji.name,
+        reason: `Requested by ${requester} via emoji add command`
+      });
+      added++;
+    } catch (error) {
+      failed++;
+      if (errors.length < 5) {
+        const detail = error.code === 30008
+          ? "server emoji limit reached"
+          : error.code === 50013
+            ? "missing permission"
+            : error.message || "could not add";
+        errors.push(`${emoji.name}: ${detail}`);
+      }
+    }
+  }
+
+  return `✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length ? "\n" + errors.join("\n") : ""}`;
+}
+
 client.once("ready", () => {
   console.log(`Emoji bot online as ${client.user.tag}`);
 });
 
 client.on("messageCreate", async message => {
-  if (message.author.id !== client.user?.id) return;
-  if (message.content.includes(MESSAGE_TAG)) return;
+  if (message.author.id === client.user?.id) {
+    if (message.content.includes(MESSAGE_TAG)) return;
+    const content = withTag(message.content || "");
+    if (content.length <= 2000) {
+      try { await message.edit({ content }); }
+      catch (error) { console.error("Could not append bot message tag:", error.message); }
+    }
+    return;
+  }
 
-  const content = withTag(message.content || "");
-  if (content.length > 2000) return;
+  if (message.author.bot || !message.guild || !message.content) return;
+  const trimmed = message.content.trim();
+  if (!trimmed.toLowerCase().startsWith("!emojisteal ") &&
+      !trimmed.toLowerCase().startsWith("!steal ")) return;
 
+  const raw = trimmed.replace(/^!(?:emojisteal|steal)\s+/i, "");
   try {
-    await message.edit({ content });
+    const result = await addEmojis(message.guild, raw, message.author.tag);
+    await message.reply({ content: withTag(result), allowedMentions: { parse: [] } });
   } catch (error) {
-    console.error("Could not append bot message tag:", error.message);
+    console.error("Prefix emoji command failed:", error);
+    await message.reply({
+      content: withTag(`❌ ${error.message || "Something went wrong while adding emojis."}`),
+      allowedMentions: { parse: [] }
+    }).catch(() => {});
   }
 });
 
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== "emojisteal") return;
-
-  const send = content => interaction.reply({
-    content: withTag(content),
-    flags: MessageFlags.Ephemeral,
-    allowedMentions: { parse: [] }
-  });
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "emojisteal") return;
 
   try {
     if (!interaction.guild) {
-      return send("Use this command inside a server.");
-    }
-
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageEmojisAndStickers)) {
-      return send("You need Manage Emojis and Stickers permission.");
-    }
-
-    const botMember = await interaction.guild.members.fetchMe();
-    if (!botMember.permissions.has(PermissionFlagsBits.ManageEmojisAndStickers)) {
-      return send("I need Manage Emojis and Stickers permission.");
+      return interaction.reply({
+        content: withTag("Use this command inside a server."),
+        allowedMentions: { parse: [] }
+      });
     }
 
     const raw = interaction.options.getString("emojis") || "";
-    const matches = [...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
-    const unique = [...new Map(matches.map(match => [
-      match[3],
-      { animated: Boolean(match[1]), name: match[2], id: match[3] }
-    ])).values()];
-
-    if (!unique.length) {
-      return send("I couldn't find any custom emoji mentions. Paste <:name:emoji_id> or <a:name:emoji_id>.");
-    }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    let added = 0;
-    let failed = 0;
-    const errors = [];
-
-    for (const emoji of unique) {
-      try {
-        const extension = emoji.animated ? "gif" : "png";
-        await interaction.guild.emojis.create({
-          attachment: `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,
-          name: emoji.name,
-          reason: `Requested by ${interaction.user.tag} via /emojisteal`
-        });
-        added++;
-      } catch (error) {
-        failed++;
-        if (errors.length < 5) {
-          const detail = error.code === 30008
-            ? "server emoji limit reached"
-            : error.code === 50013
-              ? "missing permission"
-              : error.message || "could not add";
-          errors.push(`${emoji.name}: ${detail}`);
-        }
-      }
-    }
-
-    const result = `✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length ? "\n" + errors.join("\n") : ""}`;
+    await interaction.deferReply();
+    const result = await addEmojis(interaction.guild, raw, interaction.user.tag);
     return interaction.editReply({ content: withTag(result), allowedMentions: { parse: [] } });
   } catch (error) {
     console.error("emojisteal failed:", error);
     const content = withTag(`❌ ${error.message || "Something went wrong while adding emojis."}`);
     if (interaction.deferred || interaction.replied) {
-      return interaction.followUp({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }).catch(() => {});
+      return interaction.followUp({ content, allowedMentions: { parse: [] } }).catch(() => {});
     }
-    return interaction.reply({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }).catch(() => {});
+    return interaction.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
   }
 });
 
