@@ -172,7 +172,7 @@ client.on("messageCreate", async message => {
 
 **This is a prank preview. No reports will be sent.**`)
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
-      .setFooter({ text: "Prank command • no action will be taken" });
+;
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("massreport_prank_confirm").setLabel("Confirm").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("massreport_prank_decline").setLabel("Decline").setStyle(ButtonStyle.Secondary)
