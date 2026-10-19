@@ -65,19 +65,36 @@ async function addEmojis(guild, raw, requester) {
 }
 
 
-async function toggleAnnouncementChannel(channel, requester) {
+async function toggleAnnouncementChannel(channel, requesterMember, requesterTag) {
   if (!channel || channel.type !== ChannelType.GuildText) {
     return "❌ Please provide a normal text channel, e.g. `!announcement #news`.";
   }
-  const me = await channel.guild.members.fetchMe();
-  if (!me.permissionsIn(channel).has(PermissionFlagsBits.ManageChannels)) {
-    return "❌ I need Manage Channels permission in that channel.";
+  if (!requesterMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    return "❌ You need Manage Channels permission to do this.";
   }
-  await channel.edit({
+  const me = await channel.guild.members.fetchMe();
+  if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    return "❌ I need Manage Channels permission.";
+  }
+
+  // Discord does not allow changing an existing text channel's type.
+  // Create a matching announcement channel instead, leaving the original untouched.
+  const announcement = await channel.guild.channels.create({
+    name: channel.name,
     type: ChannelType.GuildAnnouncement,
-    reason: `Announcement channel enabled by ${requester}`
+    topic: channel.topic ?? undefined,
+    parent: channel.parentId ?? undefined,
+    permissionOverwrites: channel.permissionOverwrites.cache.map(overwrite => ({
+      id: overwrite.id,
+      allow: overwrite.allow.bitfield,
+      deny: overwrite.deny.bitfield,
+      type: overwrite.type
+    })),
+    rateLimitPerUser: channel.rateLimitPerUser,
+    nsfw: channel.nsfw,
+    reason: `Announcement channel requested by ${requesterTag}; source channel: ${channel.id}`
   });
-  return `✅ ${channel} is now an Announcement channel. Members can follow it from other servers.`;
+  return `✅ Created announcement channel ${announcement}. Discord doesn't allow converting an existing text channel in place, so the original ${channel} was left unchanged.`;
 }
 
 client.once("ready", () => {
@@ -103,7 +120,7 @@ client.on("messageCreate", async message => {
     try {
       const channelId = announcementMatch[1].replace(/[<#>]/g, "");
       const channel = await message.guild.channels.fetch(channelId);
-      const result = await toggleAnnouncementChannel(channel, message.author.tag);
+      const result = await toggleAnnouncementChannel(channel, message.member, message.author.tag);
       await message.reply({ content: withTag(result), allowedMentions: { parse: [] } });
     } catch (error) {
       console.error("Announcement channel command failed:", error);
