@@ -1,338 +1,123 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AutoModerationRuleTriggerType, AutoModerationRuleEventType, AutoModerationActionType, AutoModerationRuleKeywordPresetType } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  MessageFlags
+} = require("discord.js");
 
-const aiMemory = new Map();
-const aiSettingKey = guildId => "ai_channel_"+guildId;
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+});
 
-async function askAI(channel, message) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is not configured in Railway Variables.");
-  const history = aiMemory.get(channel.id) || [];
-  history.push({role:"user",content:message.author.username+": "+message.content.slice(0,2000)});
-  const recent = history.slice(-12);
-  const response = await fetch("https://api.openai.com/v1/responses",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
-    body:JSON.stringify({
-      model:"gpt-6-luna",
-      input:[
-        {role:"developer",content:"You are a helpful, friendly AI assistant inside a Discord server. Have natural conversations, answer questions, and keep replies concise."},
-        ...recent
-      ],
-      max_output_tokens:700
-    })
-  });
-  const data = await response.json();
-  if(!response.ok) throw new Error(data.error?.message || "OpenAI API request failed.");
-  const answer = data.output_text || data.output?.flatMap(item=>item.content||[]).filter(part=>part.type==="output_text").map(part=>part.text).join("\n") || "I couldn't generate a response.";
-  history.push({role:"assistant",content:answer});
-  aiMemory.set(channel.id,history.slice(-12));
-  return answer;
-}
+const MESSAGE_TAG = "xq14g is a burger";
+const withTag = content => content.includes(MESSAGE_TAG)
+  ? content
+  : `${content}\n\n${MESSAGE_TAG}`;
 
-const db = require("./database");
+client.once("ready", () => {
+  console.log(`Emoji bot online as ${client.user.tag}`);
+});
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent] });
-const OWNER_ID = process.env.OWNER_ID;
-const setting = key => db.prepare("SELECT value FROM bot_settings WHERE key=?").get(key)?.value ?? "";
-const setSetting = (key,value) => db.prepare("INSERT INTO bot_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(key,String(value));
-const reasonFor = i => (i.options.getString("reason") || "No reason provided").slice(0,500);
-const memberFor = async (i, name="user") => i.guild.members.fetch(i.options.getUser(name).id);
-const reply = (i, content, ephemeral=true) => i.reply({content,flags:ephemeral ? MessageFlags.Ephemeral : undefined,allowedMentions:{parse:[]}});
-const isOwner = i => i.user.id === OWNER_ID;
-const getPrefix = guild => db.prepare("SELECT prefix FROM guild_settings WHERE guild_id=?").get(guild.id)?.prefix || "!";
-const setPrefix = (guild, prefix) => db.prepare("INSERT INTO guild_settings(guild_id,prefix) VALUES(?,?) ON CONFLICT(guild_id) DO UPDATE SET prefix=excluded.prefix").run(guild.id,prefix);
-const commandPages = prefix => [
-  ["Moderation", [
-    [prefix+"kick <user> [reason]","Kick a member"],
-    [prefix+"ban <user> [reason]","Ban a member"],
-    [prefix+"softban <user> [reason]","Softban a member"],
-    [prefix+"unban <user_id>","Unban a user"],
-    [prefix+"timeout <user> <minutes>","Timeout a member"],
-    [prefix+"untimeout <user>","Remove a timeout"],
-    [prefix+"warn <user> [reason]","Warn a member"],
-    [prefix+"warnings <user>","View warnings"],
-    [prefix+"clearwarnings <user>","Clear warnings"],
-    [prefix+"case <id>","View a warning case"]
-  ]],
-  ["Messages & Channels", [
-    [prefix+"purge <amount>","Delete recent messages"],
-    [prefix+"purgeuser <user> <amount>","Delete a user's messages"],
-    [prefix+"cleanbot <amount>","Delete bot messages"],
-    [prefix+"purgeattachments <amount>","Delete messages with attachments"],
-    [prefix+"purgeembeds <amount>","Delete messages with embeds"],
-    [prefix+"slowmode <seconds>","Set slowmode"],
-    [prefix+"slowmodeoff","Disable slowmode"],
-    [prefix+"slowmodecheck","Check slowmode"],
-    [prefix+"lock","Lock current channel"],
-    [prefix+"unlock","Unlock current channel"],
-    [prefix+"pin <message_id>","Pin a message"],
-    [prefix+"unpin <message_id>","Unpin a message"],
-    [prefix+"unpinall","Unpin all messages"],
-    [prefix+"clearreactions <message_id>","Clear reactions"]
-  ]],
-  ["Members & Roles", [
-    [prefix+"userinfo [user]","Show member information"],
-    [prefix+"whois <user>","Show member details"],
-    [prefix+"avatar [user]","Show an avatar"],
-    [prefix+"roleinfo <role>","Show role information"],
-    [prefix+"rolecolorinfo <role>","Show role colour"],
-    [prefix+"roleadd <user> <role>","Add a role"],
-    [prefix+"roleremove <user> <role>","Remove a role"],
-    [prefix+"nick <user> <name>","Set a nickname"],
-    [prefix+"nickname <user> <name>","Change a nickname"],
-    [prefix+"voicekick <user>","Disconnect from voice"],
-    [prefix+"move <user> <channel>","Move a member"]
-  ]],
-  ["Server & Utility", [
-    [prefix+"serverinfo","Show server information"],
-    [prefix+"membercount","Show member count"],
-    [prefix+"rolelist","List roles"],
-    [prefix+"textchannels","List text channels"],
-    [prefix+"voicechannels","List voice channels"],
-    [prefix+"created <user>","Show account creation time"],
-    [prefix+"joined <user>","Show server join time"],
-    [prefix+"permissions","Show permissions"],
-    [prefix+"audit","Show audit log"],
-    [prefix+"modstats","Show moderation totals"],
-    [prefix+"botcheck <user>","Check if a user is a bot"]
-  ]],
-  ["Channels", [
-    [prefix+"lockdown","Lock text channels"],
-    [prefix+"unlockdown","Unlock text channels"],
-    [prefix+"emergencylock","Lock current channel"],
-    [prefix+"emergencyunlock","Unlock current channel"],
-    [prefix+"topic <topic>","Set channel topic"],
-    [prefix+"announce <message> [channel]","Post an announcement"],
-    [prefix+"say <message>","Send a bot message"],
-    [prefix+"embed <title> <description>","Send an embed"]
-  ]],
-  ["Bot & Help", [
-    ["/emojisteal <emojis>","Add custom emojis (Manage Emojis required)"],
-    [prefix+"commands [page]","Open command guide"],
-    [prefix+"help","Open command guide"],
-    [prefix+"prefix <new>","Change this server prefix"],
-    ["/status <text>","Change bot activity (owner)"],
-    ["/bio <text>","Change bot bio (owner)"],
-    ["/botinfo","Show bot information"],
-    ["/ping","Check bot latency"]
-  ]]
-];
+client.on("messageCreate", async message => {
+  if (message.author.id !== client.user?.id) return;
+  if (message.content.includes(MESSAGE_TAG)) return;
 
-const commandEmbed = (guild,page=1) => {
-  const pages = commandPages(getPrefix(guild));
-  const p = Math.max(1,Math.min(pages.length,page));
-  const data = pages[p-1];
-  return new EmbedBuilder()
-    .setTitle("🛡️ Commands • Page "+p+"/"+pages.length+" • "+data[0])
-    .setDescription(data[1].map(x=>"**"+x[0]+"** — "+x[1]).join("\n"))
-    .setFooter({text:"Use "+getPrefix(guild)+"commands <page> or the buttons below."});
-};
+  const content = withTag(message.content || "");
+  if (content.length > 2000) return;
 
-const commandButtons = (guild,page=1) => {
-  const total = commandPages(getPrefix(guild)).length;
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("commands:prev:"+page).setLabel("◀ Previous").setStyle(ButtonStyle.Secondary).setDisabled(page<=1),
-    new ButtonBuilder().setCustomId("commands:next:"+page).setLabel("Next ▶").setStyle(ButtonStyle.Primary).setDisabled(page>=total)
-  );
-};
-function presence() {
-  if (!client.user) return;
-  const types = {playing:ActivityType.Playing,listening:ActivityType.Listening,watching:ActivityType.Watching,competing:ActivityType.Competing};
-  client.user.setPresence({status:setting("status_state")||"online",activities:setting("status_text")?[{name:setting("status_text"),type:types[setting("status_type")]??ActivityType.Playing}]:[]});
-}
-client.once("ready",()=>{console.log(`Moderation bot online as ${client.user.tag}`);presence();});
-client.on("messageCreate",async message=>{if(message.author.id!==client.user.id)return;const phrase="xq14g is a burger";if(message.content.includes(phrase))return;const content=message.content?`${message.content}\n\n${phrase}`:phrase;if(content.length>2000)return;try{await message.edit({content});}catch(e){console.error("Could not append bot message tag:",e.message);}});
-client.on("error",e=>console.error("Discord client error:",e));
-client.on("shardError",e=>console.error("Discord gateway error:",e));
-client.on("warn",m=>console.warn("Discord.js warning:",m));
-console.log("Starting Discord bot...");
-if(!process.env.DISCORD_BOT_TOKEN){console.error("DISCORD_BOT_TOKEN is missing from Railway Variables.");process.exit(1);}
-
-client.on("interactionCreate",async i=>{
-  if(i.isButton() && (i.customId.startsWith("commands:prev:") || i.customId.startsWith("commands:next:"))){
-    try {
-      const current = Number(i.customId.split(":")[2]) || 1;
-      const next = i.customId.includes(":prev:") ? current-1 : current+1;
-      return i.update({embeds:[commandEmbed(i.guild,next)],components:[commandButtons(i.guild,next)]});
-    } catch(e) {
-      console.error("Command guide button failed:",e);
-      return i.reply({content:"❌ I couldn't change the command guide page.",flags:MessageFlags.Ephemeral}).catch(()=>{});
-    }
-  }
-if(!i.isChatInputCommand()) return;
   try {
-    const n=i.commandName, sub=i.options.getSubcommand(false);
-    if(n==="ai" && sub==="reply"){
-      if(!i.guild)return reply(i,"Use this command inside a server.");
-      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure the AI channel.");
-      const channel=i.options.getChannel("channel");
-      setSetting(aiSettingKey(i.guild.id),channel.id);
-      aiMemory.delete(channel.id);
-      return reply(i,"🤖 AI replies enabled in "+channel.toString()+". Talk in that channel and I will reply.");
-    }
-    if(n==="automod"){
-      if(!i.guild)return reply(i,"Use this command inside a server.");
-      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to configure AutoMod.");
-      const automodMe=await i.guild.members.fetchMe();
-      if(!automodMe.permissions.has(PermissionFlagsBits.ManageGuild))return reply(i,"I need Manage Server to create AutoMod rules.");
-      const subAuto=i.options.getSubcommand(false);
-      const rules=await i.guild.autoModerationRules.fetch({cache:false});
-      if(subAuto==="status"){
-        const mine=rules.filter(r=>r.creatorId===client.user.id);
-        let total=mine.size;
-        for(const guild of client.guilds.cache.values()){if(guild.id===i.guild.id)continue;try{const other=await guild.autoModerationRules.fetch({cache:false});total+=other.filter(r=>r.creatorId===client.user.id).size;}catch{}}
-        return reply(i,`🛡️ AutoMod rules in this server: **${rules.size}**\n🤖 Rules created by me here: **${mine.size}**\n🌐 My rules across servers: **${total}**\n🎯 Badge target: **100 rules across all servers**.`);
-      }
-      if(subAuto==="setup"){
-        const names=["Emojipack • Commonly Flagged Words","Emojipack • Spam Protection","Emojipack • Mention Spam Protection"];
-        let created=0;
-        if(!rules.some(r=>r.name===names[0])){
-          await i.guild.autoModerationRules.create({name:names[0],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.KeywordPreset,triggerMetadata:{presets:[AutoModerationRuleKeywordPresetType.Profanity,AutoModerationRuleKeywordPresetType.SexualContent,AutoModerationRuleKeywordPresetType.Slurs]},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
-          created++;
-        }
-        if(!rules.some(r=>r.name===names[1])){
-          await i.guild.autoModerationRules.create({name:names[1],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.Spam,actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
-          created++;
-        }
-        if(!rules.some(r=>r.name===names[2])){
-          await i.guild.autoModerationRules.create({name:names[2],eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.MentionSpam,triggerMetadata:{mentionTotalLimit:5},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack AutoMod setup"});
-          created++;
-        }
-        return reply(i,created?`🛡️ AutoMod setup complete. Created **${created}** useful protection rule(s) in this server. Run \`/automod status\` to check progress.`:"🛡️ AutoMod is already set up in this server. Run \`/automod status\` to check progress.");
-      }
-      if(subAuto==="keyword"){
-        const name=i.options.getString("name").slice(0,100);
-        const raw=i.options.getString("keywords");
-        const keywords=[...new Set(raw.split(",").map(x=>x.trim()).filter(Boolean))].slice(0,1000);
-        if(!keywords.length)return reply(i,"Add at least one keyword.");
-        const customCount=rules.filter(r=>r.triggerType===AutoModerationRuleTriggerType.Keyword).size;
-        if(customCount>=3)return reply(i,"This server already has the maximum 3 custom keyword rules available through this command.");
-        const rule=await i.guild.autoModerationRules.create({name:`Emojipack • ${name}`.slice(0,100),eventType:AutoModerationRuleEventType.MessageSend,triggerType:AutoModerationRuleTriggerType.Keyword,triggerMetadata:{keywordFilter:keywords},actions:[{type:AutoModerationActionType.BlockMessage}],reason:"EmojiPack custom AutoMod keyword rule"});
-        return reply(i,`🛡️ Created AutoMod rule **${rule.name}** with **${keywords.length}** keyword(s).`);
-      }
-      if(subAuto==="clear"){
-        const mine=rules.filter(r=>r.creatorId===client.user.id && r.name.startsWith("Emojipack • "));
-        if(!mine.size)return reply(i,"I don't have any AutoMod rules to clear in this server.");
-        for(const rule of mine.values())await rule.delete("EmojiPack AutoMod cleanup");
-        return reply(i,`🧹 Removed **${mine.size}** AutoMod rule(s) created by me in this server.`);
-      }
-    }
-    if(n==="emojisteal"){
-      if(!i.guild)return reply(i,"Use this command inside a server.");
-      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageEmojisAndStickers))return reply(i,"You need Manage Emojis and Stickers permission.");
-      const emojiBotMember=await i.guild.members.fetchMe();
-      if(!emojiBotMember.permissions.has(PermissionFlagsBits.ManageEmojisAndStickers))return reply(i,"I need Manage Emojis and Stickers permission.");
-      const raw=i.options.getString("emojis")||"";
-      const matches=[...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
-      const unique=[...new Map(matches.map(m=>[m[3],{animated:!!m[1],name:m[2],id:m[3]}])).values()];
-      if(!unique.length)return reply(i,"I couldn't find any custom emoji mentions. Paste emojis in the form <:name:emoji_id> or <a:name:emoji_id>.");
-      await i.deferReply({flags:MessageFlags.Ephemeral});
-      let added=0,failed=0;
-      const errors=[];
-      for(const emoji of unique){
-        try{
-          const extension=emoji.animated?"gif":"png";
-          await i.guild.emojis.create({attachment:`https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,name:emoji.name,reason:`Requested by ${i.user.tag} via /emojisteal`});
-          added++;
-        }catch(e){
-          failed++;
-          if(errors.length<5)errors.push(`${emoji.name}: ${e.code===30008?"server emoji limit reached":e.code===50013?"missing permission":e.message||"could not add"}`);
-        }
-      }
-      return i.editReply(`✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length?"\n"+errors.join("\n"):""}`);
-    }
-    if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],flags:MessageFlags.Ephemeral});}
-    if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
-    if(["help","modhelp"].includes(n)){
-      const groups=[
-        ["Moderation","/kick /ban /softban /unban /timeout /untimeout /warn /warnings /clearwarnings /case"],
-        ["Messages & channels","/purge /purgeuser /cleanbot /purgeattachments /purgeembeds /slowmode /slowmodeoff /slowmodecheck /lock /unlock /lockdown /unlockdown /emergencylock /emergencyunlock /pin /unpin /unpinall /clearreactions /topic"],
-        ["Members & roles","/userinfo /whois /avatar /created /joined /roleadd /roleremove /roleinfo /rolelist /rolecolorinfo /nickname /nick /setnick /voicekick /move /permissions"],
-        ["Server tools","/serverinfo /channelinfo /membercount /textchannels /voicechannels /announce /say /embed /audit /modstats /botcheck"],
-        ["Bot","/ping /botinfo /status /bio"]
-      ];
-      return i.reply({embeds:[new EmbedBuilder().setTitle("🛡️ Moderation Bot").setDescription(groups.map(([t,v])=>`**${t}**\n${v}`).join("\n\n")).setFooter({text:"Commands require the appropriate Discord permissions."})],flags:MessageFlags.Ephemeral});
-    }
-    if(n==="ping") return reply(i,`🏓 Pong! ${client.ws.ping}ms`,false);
-    if(n==="status"){
-      if(!isOwner(i)) return reply(i,"Only the bot owner can change bot status.");
-      const text=i.options.getString("text").slice(0,128), status=i.options.getString("status")||setting("status_state")||"online", type=i.options.getString("type")||setting("status_type")||"playing";
-      setSetting("status_text",text);setSetting("status_state",status);setSetting("status_type",type);presence();return reply(i,"✅ Bot status updated.");
-    }
-    if(n==="bio"){
-      if(!isOwner(i)) return reply(i,"Only the bot owner can change the bot bio.");
-      const text=i.options.getString("text").slice(0,500);setSetting("bio",text);return reply(i,"✅ Bot bio updated.");
-    }
-    if(n==="botinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(client.user.username).setDescription(setting("bio")||"Moderation bot").addFields({name:"Servers",value:String(client.guilds.cache.size),inline:true},{name:"Ping",value:`${client.ws.ping}ms`,inline:true})],flags:MessageFlags.Ephemeral});
-    if(!i.guild) return reply(i,"Use this command inside a server.");
-    const g=i.guild, me=await g.members.fetchMe();
-    const need=(permission)=>{if(!i.memberPermissions?.has(permission)) throw new Error(`You need ${permission.toLowerCase().replace(/([A-Z])/g," $1")} permission.`);};
-    const botNeed=(permission)=>{if(!me.permissions.has(permission)) throw new Error(`I need ${permission.toLowerCase().replace(/([A-Z])/g," $1")} permission.`);};
-    const targetOpt=i.options.getUser("user",false);
-    const target=targetOpt?await g.members.fetch(targetOpt.id).catch(()=>null):null;
-    const safeTarget=()=>{if(!target) throw new Error("That user is not a member of this server.");if(target.id===i.user.id) throw new Error("You cannot target yourself.");if(target.id===client.user.id) throw new Error("You cannot target the bot.");if(g.ownerId===target.id) throw new Error("You cannot moderate the server owner.");return target;};
-    const reason=reasonFor(i);
-    const warn=(userId,why)=>db.prepare("INSERT INTO warnings(guild_id,user_id,moderator_id,reason,created_at) VALUES(?,?,?,?,?)").run(g.id,userId,i.user.id,why,Date.now());
-    const fetchChannel=()=>i.options.getChannel("channel",false)||i.channel;
-    if(n==="serverinfo") return i.reply({embeds:[new EmbedBuilder().setTitle(g.name).setThumbnail(g.iconURL()).addFields({name:"Server ID",value:g.id,inline:true},{name:"Members",value:String(g.memberCount),inline:true},{name:"Created",value:`<t:${Math.floor(g.createdTimestamp/1000)}:D>`,inline:true})],flags:MessageFlags.Ephemeral});
-    if(["userinfo","whois","created","joined","avatar","botcheck"].includes(n)){
-      const user=i.options.getUser("user",false)||i.user, m=await g.members.fetch(user.id).catch(()=>null);
-      if(n==="avatar") return i.reply({content:user.displayAvatarURL({size:1024}),flags:MessageFlags.Ephemeral});
-      if(n==="created") return reply(i,`**${user.tag}** account created <t:${Math.floor(user.createdTimestamp/1000)}:F>.`);
-      if(n==="joined") return reply(i,m?`**${user.tag}** joined <t:${Math.floor(m.joinedTimestamp/1000)}:F>.`:"That user is not in this server.");
-      if(n==="botcheck") return reply(i,user.bot?`${user.tag} is a bot account.`:`${user.tag} is not a bot account.`);
-      return i.reply({embeds:[new EmbedBuilder().setTitle(user.tag).setThumbnail(user.displayAvatarURL({size:512})).addFields({name:"User ID",value:user.id,inline:true},{name:"Bot account",value:String(user.bot),inline:true},{name:"Account created",value:`<t:${Math.floor(user.createdTimestamp/1000)}:F>`},{name:"Server nickname",value:m?.nickname||"None",inline:true},{name:"Joined server",value:m?.joinedTimestamp?`<t:${Math.floor(m.joinedTimestamp/1000)}:F>`:"Not a member",inline:true},{name:"Roles",value:m?m.roles.cache.filter(r=>r.id!==g.id).map(r=>r.toString()).slice(0,15).join(" ")||"None":"Not a member"} )],flags:MessageFlags.Ephemeral});
-    }
-    if(n==="membercount") return reply(i,`👥 This server has **${g.memberCount}** members.`);
-    if(n==="permissions") return reply(i,`Your server permissions: ${i.memberPermissions.toArray().join(", ")||"None"}`);
-    if(n==="roleinfo"||n==="rolecolorinfo"){const r=i.options.getRole("role");return reply(i,`**${r.name}** • ID: ${r.id} • Colour: ${r.hexColor} • Members: ${r.members.size} • Position: ${r.position}`);}
-    if(n==="rolelist") return reply(i,g.roles.cache.sort((a,b)=>b.position-a.position).map(r=>r.name).slice(0,80).join(", "));
-    if(n==="textchannels"||n==="voicechannels") return reply(i,g.channels.cache.filter(c=>n==="textchannels"?c.type===ChannelType.GuildText:[ChannelType.GuildVoice,ChannelType.GuildStageVoice].includes(c.type)).map(c=>c.toString()).slice(0,80).join(" ")||"None");
-    if(n==="channelinfo"){const c=i.options.getChannel("channel",false)||i.channel;return reply(i,`**${c.name}** • ID: ${c.id} • Type: ${c.type} • Created: <t:${Math.floor(c.createdTimestamp/1000)}:F>`);}
-    if(n==="modstats"){const total=db.prepare("SELECT COUNT(*) n FROM warnings WHERE guild_id=?").get(g.id).n;return reply(i,`⚖️ Warnings recorded in this server: **${total}**`);}
-    if(n==="warnings"||n==="clearwarnings"){
-      need(PermissionFlagsBits.ModerateMembers);const t=safeTarget();
-      if(n==="clearwarnings"){const r=db.prepare("DELETE FROM warnings WHERE guild_id=? AND user_id=?").run(g.id,t.id);return reply(i,`Cleared ${r.changes} warning(s) for ${t.user.tag}.`);}
-      const rows=db.prepare("SELECT * FROM warnings WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 10").all(g.id,t.id);
-      return reply(i,rows.length?rows.map(w=>`#${w.id} • <t:${Math.floor(w.created_at/1000)}:d> • ${w.reason} • moderator <@!${w.moderator_id}>`).join("\n"):`${t.user.tag} has no recorded warnings.`);
-    }
-    if(n==="case"){need(PermissionFlagsBits.ModerateMembers);const c=db.prepare("SELECT * FROM warnings WHERE guild_id=? AND id=?").get(g.id,i.options.getInteger("id"));return reply(i,c?`Case #${c.id}: <@!${c.user_id}> • ${c.reason} • moderator <@!${c.moderator_id}>`:"Warning case not found.");}
-    if(n==="warn"){need(PermissionFlagsBits.ModerateMembers);const t=safeTarget();warn(t.id,reason);return reply(i,`⚠️ Warned ${t.user.tag}. Reason: ${reason}`);}
-    if(n==="kick"){need(PermissionFlagsBits.KickMembers);botNeed(PermissionFlagsBits.KickMembers);const t=safeTarget();if(!t.kickable)throw new Error("My role must be above that member.");await t.kick(reason);return reply(i,`👢 Kicked ${t.user.tag}. Reason: ${reason}`);}
-    if(n==="ban"||n==="softban"){need(PermissionFlagsBits.BanMembers);botNeed(PermissionFlagsBits.BanMembers);const t=safeTarget();if(!t.bannable)throw new Error("My role must be above that member.");await t.ban({reason,deleteMessageSeconds:n==="softban"?604800:0});if(n==="softban")await g.bans.remove(t.id,"Softban complete");return reply(i,`🔨 ${n==="softban"?"Softbanned":"Banned"} ${t.user.tag}. Reason: ${reason}`);}
-    if(n==="unban"){need(PermissionFlagsBits.BanMembers);botNeed(PermissionFlagsBits.BanMembers);const id=i.options.getString("user_id");await g.bans.remove(id,reason);return reply(i,`Unbanned user ${id}.`);}
-    if(n==="timeout"||n==="untimeout"){need(PermissionFlagsBits.ModerateMembers);botNeed(PermissionFlagsBits.ModerateMembers);const t=safeTarget();if(!t.moderatable)throw new Error("My role must be above that member.");await t.timeout(n==="timeout"?i.options.getInteger("minutes")*60000:null,reason);return reply(i,n==="timeout"?`Timed out ${t.user.tag}.`:`Removed timeout for ${t.user.tag}.`);}
-    if(["nickname","nick","setnick"].includes(n)){need(PermissionFlagsBits.ManageNicknames);botNeed(PermissionFlagsBits.ManageNicknames);const t=safeTarget();if(!t.manageable)throw new Error("My role must be above that member.");const nick=i.options.getString("nickname")||"";await t.setNickname(nick||null,reason);return reply(i,`Nickname ${nick?"updated":"cleared"} for ${t.user.tag}.`);}
-    if(n==="roleadd"||n==="roleremove"){need(PermissionFlagsBits.ManageRoles);botNeed(PermissionFlagsBits.ManageRoles);const t=safeTarget(),r=i.options.getRole("role");if(r.position>=me.roles.highest.position||r.managed)throw new Error("I cannot manage that role due to role hierarchy.");await t.roles[n==="roleadd"?"add":"remove"](r,reason);return reply(i,`${n==="roleadd"?"Added":"Removed"} ${r.name} ${n==="roleadd"?"to":"from"} ${t.user.tag}.`);}
-    if(n==="voicekick"||n==="move"){need(PermissionFlagsBits.MoveMembers);botNeed(PermissionFlagsBits.MoveMembers);const t=safeTarget();if(!t.voice.channel)throw new Error("That member is not in voice.");await t.voice.setChannel(n==="move"?i.options.getChannel("channel"):null,reason);return reply(i,n==="move"?`Moved ${t.user.tag}.`:`Disconnected ${t.user.tag} from voice.`);}
-    if(n==="purge"||n==="purgeuser"||n==="cleanbot"||n==="purgeattachments"||n==="purgeembeds"){need(PermissionFlagsBits.ManageMessages);botNeed(PermissionFlagsBits.ManageMessages);const amount=i.options.getInteger("amount")??100;const msgs=await i.channel.messages.fetch({limit:amount});let filtered=msgs;if(n==="purgeuser"){const t=safeTarget();filtered=msgs.filter(m=>m.author.id===t.id);}if(n==="cleanbot")filtered=msgs.filter(m=>m.author.bot);if(n==="purgeattachments")filtered=msgs.filter(m=>m.attachments.size>0);if(n==="purgeembeds")filtered=msgs.filter(m=>m.embeds.length>0);const deleted=await i.channel.bulkDelete(filtered,true);return reply(i,`🧹 Deleted ${deleted.size} message(s). Messages older than 14 days cannot be bulk-deleted.`);}
-    if(["lock","emergencylock","unlock","emergencyunlock","lockdown","unlockdown"].includes(n)){need(PermissionFlagsBits.ManageChannels);botNeed(PermissionFlagsBits.ManageChannels);const lock=["lock","emergencylock","lockdown"].includes(n);const channels=n.includes("down")?g.channels.cache.filter(c=>c.type===ChannelType.GuildText):[i.channel];let changed=0;for(const c of channels){if(!c.permissionOverwrites)continue;await c.permissionOverwrites.edit(g.roles.everyone,{SendMessages:lock?false:null,AddReactions:lock?false:null}).catch(()=>{});changed++;}return reply(i,`${lock?"🔒 Locked":"🔓 Unlocked"} ${changed} channel(s).`);}
-    if(n==="slowmode"||n==="slowmodeoff"||n==="slowmodecheck"){if(n==="slowmodecheck")return reply(i,`Slowmode: ${i.channel.rateLimitPerUser||0} second(s).`);need(PermissionFlagsBits.ManageChannels);botNeed(PermissionFlagsBits.ManageChannels);const sec=n==="slowmodeoff"?0:i.options.getInteger("seconds");await i.channel.setRateLimitPerUser(sec,reason);return reply(i,`Slowmode set to ${sec} second(s).`);}
-    if(n==="topic"){need(PermissionFlagsBits.ManageChannels);botNeed(PermissionFlagsBits.ManageChannels);await i.channel.setTopic(i.options.getString("topic"),reason);return reply(i,"Channel topic updated.");}
-    if(n==="announce"||n==="say"||n==="embed"){need(PermissionFlagsBits.ManageMessages);botNeed(PermissionFlagsBits.SendMessages);const c=n==="announce"?(i.options.getChannel("channel")||i.channel):i.channel;if(n==="embed"){const e=new EmbedBuilder().setTitle(i.options.getString("title")).setDescription(i.options.getString("description")).setColor(0x5865F2);await c.send({embeds:[e]});}else await c.send({content:n==="announce"?`📢 **Announcement**\n${i.options.getString("message")}`:i.options.getString("message"),allowedMentions:{parse:[]}});return reply(i,"Message sent.");}
-    if(["pin","unpin","clearreactions"].includes(n)){need(PermissionFlagsBits.ManageMessages);botNeed(PermissionFlagsBits.ManageMessages);const id=i.options.getString("message_id");const m=await i.channel.messages.fetch(id);if(n==="pin")await m.pin();if(n==="unpin")await m.unpin();if(n==="clearreactions")await m.reactions.removeAll();return reply(i,`Message ${n==="clearreactions"?"reactions cleared":n==="pin"?"pinned":"unpinned"}.`);}
-    if(n==="unpinall"){need(PermissionFlagsBits.ManageMessages);botNeed(PermissionFlagsBits.ManageMessages);const pins=await i.channel.messages.fetchPinned();for(const m of pins.values())await m.unpin().catch(()=>{});return reply(i,`Unpinned ${pins.size} message(s).`);}
-    if(n==="audit"){need(PermissionFlagsBits.ViewAuditLog);botNeed(PermissionFlagsBits.ViewAuditLog);const logs=await g.fetchAuditLogs({limit:i.options.getInteger("amount")||5});return reply(i,logs.entries.map(e=>`• ${e.action} — ${e.target?.tag||e.target?.name||e.targetId||"Unknown"} — <t:${Math.floor(e.createdTimestamp/1000)}:R>`).join("\n")||"No recent entries.");}
-    return reply(i,"This command is not implemented yet. Please report this to the bot owner.");
-  } catch(e) {
-    console.error(`Command ${i.commandName} failed:`,e);
-    const msg=e.code===50013?"I lack a required permission. Check my server permissions and role position.":e.code===10007?"That member could not be found.":e.code===10008?"That message could not be found.":e.message||"Unexpected error.";
-    if(i.deferred||i.replied) await i.followUp({content:`❌ ${msg}`,flags:MessageFlags.Ephemeral}).catch(()=>{});
-    else await i.reply({content:`❌ ${msg}`,flags:MessageFlags.Ephemeral}).catch(()=>{});
+    await message.edit({ content });
+  } catch (error) {
+    console.error("Could not append bot message tag:", error.message);
   }
 });
-client.on("messageCreate",async message=>{if(message.author.bot||!message.guild||!message.content)return;
-const aiChannelId=setting(aiSettingKey(message.guild.id));
-if(aiChannelId===message.channel.id){
-  if(!process.env.OPENAI_API_KEY)return message.reply("⚠️ AI is not configured yet. The bot owner needs to add OPENAI_API_KEY to Railway Variables.");
-  try{
-    await message.channel.sendTyping();
-    const answer=await askAI(message.channel,message);
-    for(let i=0;i<answer.length;i+=1900) await message.reply(answer.slice(i,i+1900));
-  }catch(e){
-    console.error("AI reply failed:",e);
-    await message.reply("❌ I couldn't get an AI response right now.").catch(()=>{});
+
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "emojisteal") return;
+
+  const send = content => interaction.reply({
+    content: withTag(content),
+    flags: MessageFlags.Ephemeral,
+    allowedMentions: { parse: [] }
+  });
+
+  try {
+    if (!interaction.guild) {
+      return send("Use this command inside a server.");
+    }
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageEmojisAndStickers)) {
+      return send("You need Manage Emojis and Stickers permission.");
+    }
+
+    const botMember = await interaction.guild.members.fetchMe();
+    if (!botMember.permissions.has(PermissionFlagsBits.ManageEmojisAndStickers)) {
+      return send("I need Manage Emojis and Stickers permission.");
+    }
+
+    const raw = interaction.options.getString("emojis") || "";
+    const matches = [...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
+    const unique = [...new Map(matches.map(match => [
+      match[3],
+      { animated: Boolean(match[1]), name: match[2], id: match[3] }
+    ])).values()];
+
+    if (!unique.length) {
+      return send("I couldn't find any custom emoji mentions. Paste <:name:emoji_id> or <a:name:emoji_id>.");
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    let added = 0;
+    let failed = 0;
+    const errors = [];
+
+    for (const emoji of unique) {
+      try {
+        const extension = emoji.animated ? "gif" : "png";
+        await interaction.guild.emojis.create({
+          attachment: `https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,
+          name: emoji.name,
+          reason: `Requested by ${interaction.user.tag} via /emojisteal`
+        });
+        added++;
+      } catch (error) {
+        failed++;
+        if (errors.length < 5) {
+          const detail = error.code === 30008
+            ? "server emoji limit reached"
+            : error.code === 50013
+              ? "missing permission"
+              : error.message || "could not add";
+          errors.push(`${emoji.name}: ${detail}`);
+        }
+      }
+    }
+
+    const result = `✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length ? "\n" + errors.join("\n") : ""}`;
+    return interaction.editReply({ content: withTag(result), allowedMentions: { parse: [] } });
+  } catch (error) {
+    console.error("emojisteal failed:", error);
+    const content = withTag(`❌ ${error.message || "Something went wrong while adding emojis."}`);
+    if (interaction.deferred || interaction.replied) {
+      return interaction.followUp({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }).catch(() => {});
+    }
+    return interaction.reply({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }).catch(() => {});
   }
-  return;
-}const prefix=getPrefix(message.guild);if(!message.content.startsWith(prefix))return;const parts=message.content.slice(prefix.length).trim().split(/\s+/);const command=(parts.shift()||"").toLowerCase();if(!command)return;if(command==="commands"||command==="help"){const page=Math.max(1,Math.min(commandPages(prefix).length,Number(parts[0])||1));return message.reply({embeds:[commandEmbed(message.guild,page)],components:[commandButtons(message.guild,page)]});}if(command==="prefix"){if(!message.member.permissions.has(PermissionFlagsBits.ManageGuild))return message.reply("❌ You need Manage Server to change the prefix.");const p=parts[0];if(!p||p.length>5||/\s/.test(p))return message.reply("❌ Prefix must be 1-5 non-space characters.");setPrefix(message.guild,p);return message.reply("✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}return message.reply("ℹ️ Use `/"+command+"` for this action, or `"+prefix+"commands` for the command guide.");});
-client.login(process.env.DISCORD_BOT_TOKEN).then(()=>console.log("Discord login request accepted; waiting for READY event...")).catch(e=>{console.error("Discord login failed:",e);process.exit(1);});
+});
+
+client.on("error", error => console.error("Discord client error:", error));
+client.on("shardError", error => console.error("Discord gateway error:", error));
+
+if (!process.env.DISCORD_BOT_TOKEN) {
+  console.error("DISCORD_BOT_TOKEN is missing from Railway Variables.");
+  process.exit(1);
+}
+
+client.login(process.env.DISCORD_BOT_TOKEN)
+  .then(() => console.log("Discord login request accepted; waiting for READY event..."))
+  .catch(error => {
+    console.error("Discord login failed:", error);
+    process.exit(1);
+  });
