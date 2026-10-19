@@ -150,9 +150,9 @@ client.on("messageCreate", async message => {
   if (message.author.bot || !message.guild || !message.content) return;
   const trimmed = message.content.trim();
 
-  const tagRoleMatch = trimmed.match(/^!tag\\s+role\\s+<@&(\\d{17,20})>$/i);
-  const tagChannelMatch = trimmed.match(/^!tag\\s+channel\\s+<#(\\d{17,20})>$/i);
-  const tagTestMatch = trimmed.match(/^!tagtest\\s+(?:<@!?(\\d{17,20})>|(\\d{17,20}))$/i);
+  const tagRoleMatch = trimmed.match(/^!tag\s+role\s+<@&(\d{17,20})>$/i);
+  const tagChannelMatch = trimmed.match(/^!tag\s+channel\s+<#(\d{17,20})>$/i);
+  const tagTestMatch = trimmed.match(/^!tagtest\s+(?:<@!?(\d{17,20})>|(\d{17,20}))$/i);
   if (tagRoleMatch || tagChannelMatch) {
     if (!isManager(message.member)) {
       await message.reply({ content: withTag("❌ You need Manage Server permission to configure tag embeds."), allowedMentions: { parse: [] } });
@@ -182,7 +182,7 @@ client.on("messageCreate", async message => {
     return;
   }
 
-  const announcementMatch = trimmed.match(/^!announcement\\s+(<#\\d{17,20}>|\\d{17,20})\\s*$/i);
+  const announcementMatch = trimmed.match(/^!announcement\s+(<#\d{17,20}>|\d{17,20})\s*$/i);
   if (announcementMatch) {
     try {
       const channelId = announcementMatch[1].replace(/[<#>]/g, "");
@@ -221,7 +221,7 @@ client.on("interactionCreate", async interaction => {
   if (interaction.commandName === "tag") {
     try {
       if (!interaction.guild) return interaction.reply({ content: "Use this command inside a server.", flags: MessageFlags.Ephemeral });
-      if (!isManager(interaction.member)) return interaction.reply({ content: "You need Manage Server permission.", flags: MessageFlags.Ephemeral });
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "You need Manage Server permission.", flags: MessageFlags.Ephemeral });
       const cfg = getGuildTagConfig(interaction.guild.id);
       if (interaction.options.getSubcommand() === "role") cfg.roleId = interaction.options.getRole("role", true).id;
       else cfg.channelId = interaction.options.getChannel("channel", true).id;
