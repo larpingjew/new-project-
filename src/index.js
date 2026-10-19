@@ -4,7 +4,10 @@ const {
   PermissionFlagsBits,
   MessageFlags,
   ChannelType,
-  EmbedBuilder
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } = require("discord.js");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -150,6 +153,34 @@ client.on("messageCreate", async message => {
   if (message.author.bot || !message.guild || !message.content) return;
   const trimmed = message.content.trim();
 
+  const massReportMatch = trimmed.match(/^!massreport\\s+(<@!?(\\d{17,20})>|\\d{17,20})\\s+\\S+$/i);
+  if (trimmed.toLowerCase().startsWith("!massreport")) {
+    if (!massReportMatch) {
+      await message.reply({ content: "Usage: `!massreport <user> <tokens>` (tokens are fake and are not used).", allowedMentions: { parse: [] } });
+      return;
+    }
+    const targetId = massReportMatch[2] || massReportMatch[1];
+    const target = await client.users.fetch(targetId).catch(() => null);
+    if (!target) {
+      await message.reply({ content: "❌ I couldn't find that user.", allowedMentions: { parse: [] } });
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setColor(0xF0B232)
+      .setTitle("⚠️ Mass Report Confirmation")
+      .setDescription(`Are you sure you would like to mass report ${target}?
+
+**This is a prank preview. No reports will be sent.**`)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .setFooter({ text: "Prank command • no action will be taken" });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("massreport_prank_confirm").setLabel("Confirm").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("massreport_prank_decline").setLabel("Decline").setStyle(ButtonStyle.Secondary)
+    );
+    await message.reply({ embeds: [embed], components: [row], allowedMentions: { parse: [] } });
+    return;
+  }
+
   if (trimmed.toLowerCase() === "!tags") {
     const tagsEmbed = new EmbedBuilder()
       .setColor(0x5865F2)
@@ -235,6 +266,16 @@ client.on("messageCreate", async message => {
 });
 
 client.on("interactionCreate", async interaction => {
+  if (interaction.isButton() && ["massreport_prank_confirm", "massreport_prank_decline"].includes(interaction.customId)) {
+    const response = interaction.customId === "massreport_prank_confirm"
+      ? "😂 It's a prank! No reports have been sent."
+      : "😂 You escaped! It's a prank — no reports have been sent.";
+    const disabledRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("massreport_prank_confirm").setLabel("Confirm").setStyle(ButtonStyle.Danger).setDisabled(true),
+      new ButtonBuilder().setCustomId("massreport_prank_decline").setLabel("Decline").setStyle(ButtonStyle.Secondary).setDisabled(true)
+    );
+    return interaction.update({ content: response, embeds: [], components: [disabledRow], allowedMentions: { parse: [] } });
+  }
   if (!interaction.isChatInputCommand()) return;
 
 
