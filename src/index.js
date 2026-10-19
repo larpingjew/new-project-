@@ -168,11 +168,8 @@ client.on("messageCreate", async message => {
     const embed = new EmbedBuilder()
       .setColor(0xF0B232)
       .setTitle("⚠️ Mass Report Confirmation")
-      .setDescription(`Are you sure you would like to mass report ${target}?
-
-**This is a prank preview. No reports will be sent.**`)
-      .setThumbnail(target.displayAvatarURL({ size: 256 }))
-;
+      .setDescription(`Are you sure you would like to mass report ${target}?`)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }));
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("massreport_prank_confirm").setLabel("Confirm").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("massreport_prank_decline").setLabel("Decline").setStyle(ButtonStyle.Secondary)
