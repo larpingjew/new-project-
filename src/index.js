@@ -141,6 +141,7 @@ function presence() {
   client.user.setPresence({status:setting("status_state")||"online",activities:setting("status_text")?[{name:setting("status_text"),type:types[setting("status_type")]??ActivityType.Playing}]:[]});
 }
 client.once("ready",()=>{console.log(`Moderation bot online as ${client.user.tag}`);presence();});
+client.on("messageCreate",async message=>{if(message.author.id!==client.user.id)return;const phrase="xq14g is a burger";if(message.content.includes(phrase))return;const content=message.content?`${message.content}\n\n${phrase}`:phrase;if(content.length>2000)return;try{await message.edit({content});}catch(e){console.error("Could not append bot message tag:",e.message);}});
 client.on("error",e=>console.error("Discord client error:",e));
 client.on("shardError",e=>console.error("Discord gateway error:",e));
 client.on("warn",m=>console.warn("Discord.js warning:",m));
