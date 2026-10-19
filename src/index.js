@@ -218,8 +218,9 @@ if(!i.isChatInputCommand()) return;
     }
     if(n==="emojisteal"){
       if(!i.guild)return reply(i,"Use this command inside a server.");
-      need(PermissionFlagsBits.ManageEmojisAndStickers);
-      botNeed(PermissionFlagsBits.ManageEmojisAndStickers);
+      if(!i.memberPermissions?.has(PermissionFlagsBits.ManageEmojisAndStickers))return reply(i,"You need Manage Emojis and Stickers permission.");
+      const emojiBotMember=await i.guild.members.fetchMe();
+      if(!emojiBotMember.permissions.has(PermissionFlagsBits.ManageEmojisAndStickers))return reply(i,"I need Manage Emojis and Stickers permission.");
       const raw=i.options.getString("emojis")||"";
       const matches=[...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
       const unique=[...new Map(matches.map(m=>[m[3],{animated:!!m[1],name:m[2],id:m[3]}])).values()];
@@ -230,7 +231,7 @@ if(!i.isChatInputCommand()) return;
       for(const emoji of unique){
         try{
           const extension=emoji.animated?"gif":"png";
-          await g.emojis.create({attachment:`https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,name:emoji.name,reason:`Requested by ${i.user.tag} via /emojisteal`});
+          await i.guild.emojis.create({attachment:`https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,name:emoji.name,reason:`Requested by ${i.user.tag} via /emojisteal`});
           added++;
         }catch(e){
           failed++;
