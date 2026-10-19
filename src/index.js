@@ -2,7 +2,8 @@ const {
   Client,
   GatewayIntentBits,
   PermissionFlagsBits,
-  MessageFlags
+  MessageFlags,
+  ChannelType
 } = require("discord.js");
 
 const client = new Client({
@@ -63,6 +64,22 @@ async function addEmojis(guild, raw, requester) {
   return `✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length ? "\n" + errors.join("\n") : ""}`;
 }
 
+
+async function toggleAnnouncementChannel(channel, requester) {
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    return "❌ Please provide a normal text channel, e.g. `!announcement #news`.";
+  }
+  const me = await channel.guild.members.fetchMe();
+  if (!me.permissionsIn(channel).has(PermissionFlagsBits.ManageChannels)) {
+    return "❌ I need Manage Channels permission in that channel.";
+  }
+  await channel.edit({
+    type: ChannelType.GuildAnnouncement,
+    reason: `Announcement channel enabled by ${requester}`
+  });
+  return `✅ ${channel} is now an Announcement channel. Members can follow it from other servers.`;
+}
+
 client.once("ready", () => {
   console.log(`Emoji bot online as ${client.user.tag}`);
 });
@@ -80,6 +97,23 @@ client.on("messageCreate", async message => {
 
   if (message.author.bot || !message.guild || !message.content) return;
   const trimmed = message.content.trim();
+
+  const announcementMatch = trimmed.match(/^!announcement\\s+(<#\\d{17,20}>|\\d{17,20})\\s*$/i);
+  if (announcementMatch) {
+    try {
+      const channelId = announcementMatch[1].replace(/[<#>]/g, "");
+      const channel = await message.guild.channels.fetch(channelId);
+      const result = await toggleAnnouncementChannel(channel, message.author.tag);
+      await message.reply({ content: withTag(result), allowedMentions: { parse: [] } });
+    } catch (error) {
+      console.error("Announcement channel command failed:", error);
+      await message.reply({
+        content: withTag(`❌ Could not change that channel: ${error.message || "unknown error"}`),
+        allowedMentions: { parse: [] }
+      }).catch(() => {});
+    }
+    return;
+  }
   if (!trimmed.toLowerCase().startsWith("!emojisteal ") &&
       !trimmed.toLowerCase().startsWith("!steal ")) return;
 
