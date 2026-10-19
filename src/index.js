@@ -35,7 +35,7 @@ function makeTagEmbed(member) {
   const role = cfg.roleId ? member.guild.roles.cache.get(cfg.roleId) : null;
   return new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription(`<@!${member.id}> just equipped **${member.guild.name}**'s server tag and got ${role ? role.toString() : "@Supporter"}!\\n\\n**How to equip it**\\n**User Settings → Profiles → Server Tag** → pick this server.`)
+    .setDescription(`<@!${member.id}> just equipped **${member.guild.name}**'s server tag and got ${role ? role.toString() : "@Supporter"}!\n\n**How to equip it**\n**User Settings → Profiles → Server Tag** → pick this server.`)
     .setThumbnail(member.displayAvatarURL({ size: 256 }));
 }
 async function sendTagEmbed(channel, member) {
@@ -164,7 +164,7 @@ client.on("messageCreate", async message => {
         "`/tag role` — Set the role for the embed.",
         "`/tag channel` — Set the channel for the embed.",
         "`/tagtest user` — Send a test embed for a selected member."
-      ].join("\\n"))
+      ].join("\n"))
       .setFooter({ text: "Use Manage Server permission to change tag settings." });
     await message.reply({ embeds: [tagsEmbed], allowedMentions: { parse: [] } });
     return;
