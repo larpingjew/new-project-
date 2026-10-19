@@ -215,6 +215,29 @@ if(!i.isChatInputCommand()) return;
         return reply(i,`🧹 Removed **${mine.size}** AutoMod rule(s) created by me in this server.`);
       }
     }
+    if(n==="emojisteal"){
+      if(!i.guild)return reply(i,"Use this command inside a server.");
+      need(PermissionFlagsBits.ManageEmojisAndStickers);
+      botNeed(PermissionFlagsBits.ManageEmojisAndStickers);
+      const raw=i.options.getString("emojis")||"";
+      const matches=[...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\\d{17,20})>/g)];
+      const unique=[...new Map(matches.map(m=>[m[3],{animated:!!m[1],name:m[2],id:m[3]}])).values()];
+      if(!unique.length)return reply(i,"I couldn't find any custom emoji mentions. Paste emojis in the form <:name:emoji_id> or <a:name:emoji_id>.");
+      await i.deferReply({flags:MessageFlags.Ephemeral});
+      let added=0,failed=0;
+      const errors=[];
+      for(const emoji of unique){
+        try{
+          const extension=emoji.animated?"gif":"png";
+          await g.emojis.create({attachment:`https://cdn.discordapp.com/emojis/${emoji.id}.${extension}?size=128&quality=lossless`,name:emoji.name,reason:`Requested by ${i.user.tag} via /emojisteal`});
+          added++;
+        }catch(e){
+          failed++;
+          if(errors.length<5)errors.push(`${emoji.name}: ${e.code===30008?"server emoji limit reached":e.code===50013?"missing permission":e.message||"could not add"}`);
+        }
+      }
+      return i.editReply(`✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length?"\\n"+errors.join("\\n"):""}`);
+    }
     if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],flags:MessageFlags.Ephemeral});}
     if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
     if(["help","modhelp"].includes(n)){
