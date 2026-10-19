@@ -12,6 +12,21 @@ const commands = [
         .setMaxLength(4000)
     ),
   new SlashCommandBuilder()
+    .setName("tag")
+    .setDescription("Configure server-tag announcement embeds")
+    .addSubcommand(sub => sub
+      .setName("role")
+      .setDescription("Set the role mentioned in server-tag embeds")
+      .addRoleOption(option => option.setName("role").setDescription("Role to mention").setRequired(true)))
+    .addSubcommand(sub => sub
+      .setName("channel")
+      .setDescription("Set the channel for server-tag embeds")
+      .addChannelOption(option => option.setName("channel").setDescription("Text channel for embeds").setRequired(true).addChannelTypes(ChannelType.GuildText))),
+  new SlashCommandBuilder()
+    .setName("tagtest")
+    .setDescription("Send a test server-tag embed for a member")
+    .addUserOption(option => option.setName("user").setDescription("Member to preview").setRequired(true)),
+  new SlashCommandBuilder()
     .setName("announcement")
     .setDescription("Create an announcement channel based on an existing text channel")
     .addChannelOption(option => option.setName("channel").setDescription("Text channel to copy").setRequired(true).addChannelTypes(ChannelType.GuildText))
@@ -29,11 +44,11 @@ const rest = new REST({ version: "10" }).setToken(token);
 
 (async () => {
   try {
-    console.log("Registering the only global slash command: /emojisteal");
+    console.log("Registering global slash commands");
     await rest.put(Routes.applicationCommands(clientId), {
       body: commands.map(command => command.toJSON())
     });
-    console.log("Only /emojisteal is registered.");
+    console.log("Global slash commands registered.");
   } catch (error) {
     console.error("Command registration failed:", error);
     process.exit(1);
