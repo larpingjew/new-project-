@@ -107,6 +107,7 @@ const commandPages = prefix => [
     [prefix+"embed <title> <description>","Send an embed"]
   ]],
   ["Bot & Help", [
+    ["/emojisteal <emojis>","Add custom emojis (Manage Emojis required)"],
     [prefix+"commands [page]","Open command guide"],
     [prefix+"help","Open command guide"],
     [prefix+"prefix <new>","Change this server prefix"],
@@ -220,7 +221,7 @@ if(!i.isChatInputCommand()) return;
       need(PermissionFlagsBits.ManageEmojisAndStickers);
       botNeed(PermissionFlagsBits.ManageEmojisAndStickers);
       const raw=i.options.getString("emojis")||"";
-      const matches=[...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\\d{17,20})>/g)];
+      const matches=[...raw.matchAll(/<(a?):([a-zA-Z0-9_]{2,32}):(\d{17,20})>/g)];
       const unique=[...new Map(matches.map(m=>[m[3],{animated:!!m[1],name:m[2],id:m[3]}])).values()];
       if(!unique.length)return reply(i,"I couldn't find any custom emoji mentions. Paste emojis in the form <:name:emoji_id> or <a:name:emoji_id>.");
       await i.deferReply({flags:MessageFlags.Ephemeral});
@@ -236,7 +237,7 @@ if(!i.isChatInputCommand()) return;
           if(errors.length<5)errors.push(`${emoji.name}: ${e.code===30008?"server emoji limit reached":e.code===50013?"missing permission":e.message||"could not add"}`);
         }
       }
-      return i.editReply(`✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length?"\\n"+errors.join("\\n"):""}`);
+      return i.editReply(`✅ Added **${added}** emoji(s). ❌ Failed: **${failed}**.${errors.length?"\n"+errors.join("\n"):""}`);
     }
     if(n==="commands"){const page=i.options.getInteger("page")||1;return i.reply({embeds:[commandEmbed(i.guild,page)],components:[commandButtons(i.guild,page)],flags:MessageFlags.Ephemeral});}
     if(n==="prefix"){if(!i.guild)return reply(i,"Use this command inside a server.");if(!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild))return reply(i,"You need Manage Server to change the prefix.");const p=i.options.getString("prefix");if(/\s/.test(p))return reply(i,"Prefix cannot contain spaces.");setPrefix(i.guild,p);return reply(i,"✅ Prefix changed to `"+p+"`. Use `"+p+"commands`.");}
