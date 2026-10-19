@@ -148,7 +148,26 @@ client.on("messageCreate", async message => {
 });
 
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== "emojisteal") return;
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "announcement") {
+    try {
+      if (!interaction.guild) {
+        return interaction.reply({ content: withTag("Use this command inside a server."), allowedMentions: { parse: [] } });
+      }
+      const channel = interaction.options.getChannel("channel", true);
+      await interaction.deferReply();
+      const result = await toggleAnnouncementChannel(channel, interaction.member, interaction.user.tag);
+      return interaction.editReply({ content: withTag(result), allowedMentions: { parse: [] } });
+    } catch (error) {
+      console.error("Announcement slash command failed:", error);
+      const content = withTag(`❌ Could not create announcement channel: ${error.message || "unknown error"}`);
+      if (interaction.deferred || interaction.replied) return interaction.editReply({ content, allowedMentions: { parse: [] } }).catch(() => {});
+      return interaction.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
+    }
+  }
+
+  if (interaction.commandName !== "emojisteal") return;
 
   try {
     if (!interaction.guild) {
