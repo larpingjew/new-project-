@@ -1,25 +1,37 @@
-const { REST, Routes, SlashCommandBuilder, ChannelType } = require("discord.js");
-const commands = [];
-const mod=(n,d)=>new SlashCommandBuilder().setName(n).setDescription(d);
-const ur=(n,d)=>mod(n,d).addUserOption(o=>o.setName("user").setDescription("Target member").setRequired(true)).addStringOption(o=>o.setName("reason").setDescription("Reason").setMaxLength(500));
-commands.push(
- mod("automod","Configure Discord AutoMod").addSubcommand(s=>s.setName("setup").setDescription("Create AutoMod protection rules")).addSubcommand(s=>s.setName("status").setDescription("Show AutoMod rule progress")).addSubcommand(s=>s.setName("clear").setDescription("Remove AutoMod rules created by this bot")),
- mod("ai","Configure an AI chat channel").addSubcommand(s=>s.setName("reply").setDescription("Set the channel where the bot replies with AI").addChannelOption(o=>o.setName("channel").setDescription("AI chat channel").setRequired(true).addChannelTypes(ChannelType.GuildText))),
- mod("help","Show moderation commands"),mod("commands","Browse commands and usage").addIntegerOption(o=>o.setName("page").setDescription("Page number").setMinValue(1)),
- mod("emojisteal","Add custom emojis from emoji mentions to this server").addStringOption(o=>o.setName("emojis").setDescription("Paste one or more custom emoji mentions, e.g. <:name:123...>").setRequired(true).setMaxLength(4000)),
- mod("ping","Check bot latency"),mod("serverinfo","Show server information"),mod("userinfo","Show member information").addUserOption(o=>o.setName("user").setDescription("Member")),mod("avatar","Show a member avatar").addUserOption(o=>o.setName("user").setDescription("User")),mod("roleinfo","Show role information").addRoleOption(o=>o.setName("role").setDescription("Role").setRequired(true)),mod("channelinfo","Show channel information").addChannelOption(o=>o.setName("channel").setDescription("Channel")),mod("botinfo","Show bot information"),
- mod("status","Change bot activity").addStringOption(o=>o.setName("text").setDescription("Activity text").setRequired(true)).addStringOption(o=>o.setName("status").setDescription("Presence").addChoices({name:"Online",value:"online"},{name:"Idle",value:"idle"},{name:"Do Not Disturb",value:"dnd"},{name:"Invisible",value:"invisible"})).addStringOption(o=>o.setName("type").setDescription("Activity type").addChoices({name:"Playing",value:"playing"},{name:"Listening",value:"listening"},{name:"Watching",value:"watching"},{name:"Competing",value:"competing"})),
- mod("bio","Set bot bio").addStringOption(o=>o.setName("text").setDescription("Bio").setRequired(true)),mod("prefix","Change this server prefix").addStringOption(o=>o.setName("prefix").setDescription("New prefix, e.g. !").setRequired(true).setMinLength(1).setMaxLength(5)),
- ur("kick","Kick a member"),ur("ban","Ban a member"),ur("softban","Softban a member"),mod("unban","Unban a user").addStringOption(o=>o.setName("user_id").setDescription("User ID").setRequired(true)).addStringOption(o=>o.setName("reason").setDescription("Reason")),
- mod("timeout","Timeout a member").addUserOption(o=>o.setName("user").setDescription("Target member").setRequired(true)).addIntegerOption(o=>o.setName("minutes").setDescription("Minutes").setRequired(true).setMinValue(1).setMaxValue(40320)).addStringOption(o=>o.setName("reason").setDescription("Reason").setMaxLength(500)),
- ur("untimeout","Remove timeout"),ur("warn","Warn a member"),ur("warnings","View warnings"),ur("clearwarnings","Clear warnings"),ur("purgeuser","Delete member messages").addIntegerOption(o=>o.setName("amount").setDescription("Messages to scan").setMinValue(1).setMaxValue(100)),ur("nickname","Change nickname").addStringOption(o=>o.setName("nickname").setDescription("Nickname").setMaxLength(32)),
- mod("purge","Bulk delete messages").addIntegerOption(o=>o.setName("amount").setDescription("1-100").setRequired(true).setMinValue(1).setMaxValue(100)),mod("slowmode","Set slowmode").addIntegerOption(o=>o.setName("seconds").setDescription("Seconds").setRequired(true).setMinValue(0).setMaxValue(21600)),...["lock","unlock","lockdown","unlockdown"].map(n=>mod(n,"Lock or unlock channels")),
- mod("announce","Post announcement").addStringOption(o=>o.setName("message").setDescription("Announcement").setRequired(true).setMaxLength(1800)).addChannelOption(o=>o.setName("channel").setDescription("Channel").addChannelTypes(ChannelType.GuildText)),mod("say","Send bot message").addStringOption(o=>o.setName("message").setDescription("Message").setRequired(true).setMaxLength(1800)),mod("embed","Send embed").addStringOption(o=>o.setName("title").setDescription("Title").setRequired(true).setMaxLength(200)).addStringOption(o=>o.setName("description").setDescription("Description").setRequired(true).setMaxLength(3500)),
- mod("roleadd","Add role").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).addRoleOption(o=>o.setName("role").setDescription("Role").setRequired(true)),mod("roleremove","Remove role").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).addRoleOption(o=>o.setName("role").setDescription("Role").setRequired(true)),...["nick","setnick"].map(n=>mod(n,"Set nickname").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).addStringOption(o=>o.setName("nickname").setDescription("Nickname").setMaxLength(32))),mod("voicekick","Disconnect voice member").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)),mod("move","Move voice member").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).addChannelOption(o=>o.setName("channel").setDescription("Voice channel").setRequired(true).addChannelTypes(ChannelType.GuildVoice,ChannelType.GuildStageVoice)),mod("topic","Set channel topic").addStringOption(o=>o.setName("topic").setDescription("Topic").setRequired(true).setMaxLength(1024)),
- ...["clearreactions","pin","unpin"].map(n=>mod(n,n==="pin"?"Pin message":n==="unpin"?"Unpin message":"Clear reactions").addStringOption(o=>o.setName("message_id").setDescription("Message ID").setRequired(true))),
- mod("slowmodeoff","Disable slowmode"),mod("rolelist","List roles"),mod("membercount","Member count"),mod("created","Account creation time").addUserOption(o=>o.setName("user").setDescription("User").setRequired(true)),mod("joined","Server join time").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)),mod("permissions","Show your permissions"),mod("modstats","Moderation totals"),mod("case","Show warning case").addIntegerOption(o=>o.setName("id").setDescription("Case ID").setRequired(true).setMinValue(1)),...["cleanbot","purgeattachments","purgeembeds"].map(n=>mod(n,"Delete matching messages").addIntegerOption(o=>o.setName("amount").setDescription("1-100").setRequired(true).setMinValue(1).setMaxValue(100))),mod("unpinall","Unpin all messages"),mod("audit","Show audit log"),mod("rolecolorinfo","Show role colour").addRoleOption(o=>o.setName("role").setDescription("Role").setRequired(true)),mod("textchannels","List text channels"),mod("voicechannels","List voice channels"),mod("emergencylock","Lock channel"),mod("emergencyunlock","Unlock channel"),mod("slowmodecheck","Check slowmode"),mod("botcheck","Check if user is a bot").addUserOption(o=>o.setName("user").setDescription("User").setRequired(true)),mod("whois","Show member details").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true))
-);
-const token=process.env.DISCORD_BOT_TOKEN,clientId=process.env.DISCORD_CLIENT_ID;
-if(!token||!clientId){console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID in Railway variables.");process.exit(1);}
-const rest=new REST({version:"10"}).setToken(token);
-(async()=>{try{console.log(`Registering ${commands.length} GLOBAL slash commands...`);await rest.put(Routes.applicationCommands(clientId),{body:commands.map(c=>c.toJSON())});console.log("Global slash commands registered.");}catch(e){console.error("Command registration failed:",e);process.exit(1);}})();
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+
+const commands = [
+  new SlashCommandBuilder()
+    .setName("emojisteal")
+    .setDescription("Add custom emojis from emoji mentions to this server")
+    .addStringOption(option =>
+      option
+        .setName("emojis")
+        .setDescription("Paste one or more custom emoji mentions, e.g. <:name:123456789012345678>")
+        .setRequired(true)
+        .setMaxLength(4000)
+    )
+];
+
+const token = process.env.DISCORD_BOT_TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID;
+
+if (!token || !clientId) {
+  console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID in Railway variables.");
+  process.exit(1);
+}
+
+const rest = new REST({ version: "10" }).setToken(token);
+
+(async () => {
+  try {
+    console.log("Registering the only global slash command: /emojisteal");
+    await rest.put(Routes.applicationCommands(clientId), {
+      body: commands.map(command => command.toJSON())
+    });
+    console.log("Only /emojisteal is registered.");
+  } catch (error) {
+    console.error("Command registration failed:", error);
+    process.exit(1);
+  }
+})();
