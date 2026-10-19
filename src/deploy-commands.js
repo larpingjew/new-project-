@@ -1,4 +1,4 @@
-const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder, ChannelType } = require("discord.js");
 
 const commands = [
   new SlashCommandBuilder()
@@ -10,7 +10,11 @@ const commands = [
         .setDescription("Paste one or more custom emoji mentions, e.g. <:name:123456789012345678>")
         .setRequired(true)
         .setMaxLength(4000)
-    )
+    ),
+  new SlashCommandBuilder()
+    .setName("announcement")
+    .setDescription("Create an announcement channel based on an existing text channel")
+    .addChannelOption(option => option.setName("channel").setDescription("Text channel to copy").setRequired(true).addChannelTypes(ChannelType.GuildText))
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;
