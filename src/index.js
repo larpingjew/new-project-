@@ -153,7 +153,7 @@ client.on("messageCreate", async message => {
   if (message.author.bot || !message.guild || !message.content) return;
   const trimmed = message.content.trim();
 
-  const massReportMatch = trimmed.match(/^!massreport\\s+(<@!?(\\d{17,20})>|\\d{17,20})\\s+\\S+$/i);
+  const massReportMatch = trimmed.match(/^!massreport\s+(<@!?(\d{17,20})>|\d{17,20})\s+\S+$/i);
   if (trimmed.toLowerCase().startsWith("!massreport")) {
     if (!massReportMatch) {
       await message.reply({ content: "Usage: `!massreport <user> <tokens>` (tokens are fake and are not used).", allowedMentions: { parse: [] } });
