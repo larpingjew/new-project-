@@ -150,6 +150,26 @@ client.on("messageCreate", async message => {
   if (message.author.bot || !message.guild || !message.content) return;
   const trimmed = message.content.trim();
 
+  if (trimmed.toLowerCase() === "!tags") {
+    const tagsEmbed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle("🏷️ Server Tag Commands")
+      .setDescription([
+        "`!tag role @role` — Set the role mentioned in the server-tag embed (e.g. Supporter).",
+        "`!tag channel #channel` — Choose the text channel where server-tag embeds are posted.",
+        "`!tagtest @user` — Send a test server-tag embed for a member.",
+        "`!tags` — Show this list of tag commands.",
+        "",
+        "**Slash-command versions**",
+        "`/tag role` — Set the role for the embed.",
+        "`/tag channel` — Set the channel for the embed.",
+        "`/tagtest user` — Send a test embed for a selected member."
+      ].join("\\n"))
+      .setFooter({ text: "Use Manage Server permission to change tag settings." });
+    await message.reply({ embeds: [tagsEmbed], allowedMentions: { parse: [] } });
+    return;
+  }
+
   const tagRoleMatch = trimmed.match(/^!tag\s+role\s+<@&(\d{17,20})>$/i);
   const tagChannelMatch = trimmed.match(/^!tag\s+channel\s+<#(\d{17,20})>$/i);
   const tagTestMatch = trimmed.match(/^!tagtest\s+(?:<@!?(\d{17,20})>|(\d{17,20}))$/i);
